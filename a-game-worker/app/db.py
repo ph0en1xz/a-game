@@ -6,6 +6,25 @@ import asyncpg
 
 log = logging.getLogger("worker.db")
 
+async def sync_matches_per_competition(pool: asyncpg.Pool, matches: list[list[dict]]) -> int:
+    UPSERT = """
+        
+    """
+
+async def get_league_codes(pool: asyncpg.Pool) -> list[str]:
+    QUERY = """
+        SELECT code
+        FROM a_game.competition
+        WHERE enabled
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(QUERY)
+        log.info("League codes fetched")
+
+    codes = [row["code"] for row in rows]
+    log.info("Fetched %d enabled league codes", len(codes))
+    return codes
+
 async def sync_competitions(pool: asyncpg.Pool, competitions: list[dict]) -> int:
     UPSERT_COMPETITION = """
         INSERT INTO a_game.competition (id, name, code, type, emblem)

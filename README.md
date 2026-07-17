@@ -10,6 +10,9 @@ statistic.
 
 ## Why this exists
 
+This is a for-fun project, built mostly for demonstration purposes — a learning vehicle and a
+portfolio piece, not a product. Nobody is meant to depend on it.
+
 Honestly? To learn Kubernetes properly, and to have something real to point at.
 
 A predictions API is a good excuse: it needs scheduled ingestion, a database that actually models

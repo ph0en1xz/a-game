@@ -1,3 +1,4 @@
+import datetime
 import httpx
 import asyncio
 
@@ -59,34 +60,26 @@ async def get_all_competitions(client: httpx.AsyncClient) -> list[dict]:
   return competitions
 
 
-async def get_competition_matches(self) -> httpx.Response:
-  log.info("Getting competition matches...")
+async def get_matches_per_competition(league_codes: list[str], client: httpx.AsyncClient) -> list[list[dict]]:
+  """Returns upcoming matches per competition — the response is an envelope
+  {"count": 13, "resultSet": {...}, "competition: {...}", "matches": [...]}."""
+  
+  today = datetime.date.today()
+  one_week = today + datetime.timedelta(days=7)
   params = {
     "status": "SCHEDULED",
-    "dateFrom": "2024-06-01",
-    "dateTo": "2024-06-30"
+    "dateFrom": today.isoformat(),
+    "dateTo": one_week.isoformat(),
   }
-  
-  client = await self.https_client()
 
-  max_retries = 3
-  response = None
-  while max_retries > 0:
-    try:
-      log.info(f"Making GET request to {settings.competitions_matches_endpoint} with params: {params}")
-      response = await client.get(f"{settings.competitions_matches_endpoint}?status=SCHEDULED", params=params)
-      log.info(f"Response status code: {response.status_code}")
-      break  # If successful, exit the loop
+  matches_per_comp: list[list[dict]] = []
+  for code in league_codes:
+    await asyncio.sleep(2)
+    url = settings.sports_competitions_matches_endpoint.format(code=code)
+    resp = await _get(client, url, params=params)
 
-    except httpx.RequestError as e:
-      log.error(f"An error occurred while requesting {e.request.url!r}: {str(e)}")
-      if max_retries > 0:
-        log.info(f"Retrying... ({max_retries} attempts left)")
-        max_retries -= 1
-        await asyncio.sleep(1)  # Wait for 1 second before retrying
-    
-    if response and response.status_code != 200:
-      log.error(f"Error getting competition matches: {response.text}")
-      raise Exception(f"Error getting competition matches: {response.text}")
-  
-  return response
+    matches: list[dict] = resp.json()["matches"]
+    log.info("Fetched %d matches for %s", len(matches), code)
+    matches_per_comp.append(matches)
+
+  return matches_per_comp
