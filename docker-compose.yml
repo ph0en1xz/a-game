@@ -1,0 +1,39 @@
+services:
+  localstack:
+    image: localstack/localstack:3.8
+    container_name: a-game-localstack
+    ports:
+      - "4566:4566"            # single AWS endpoint everything talks to
+    environment:
+      - SERVICES=s3,sts,iam,ec2
+      - DEBUG=0
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"   # lets LocalStack run Lambdas later
+      - "./localstack/init/ready.d:/etc/localstack/init/ready.d"   # runs *.sh on startup — recreates the tfstate 
+    healthcheck:
+      test: ["CMD", "curl", "-f", "${LOCALSTACK_BASE_URL}/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:16-alpine
+    container_name: a-game-postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_HOST: localhost
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: a_game_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "a_game_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

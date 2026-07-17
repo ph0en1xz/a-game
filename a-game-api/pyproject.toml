@@ -1,0 +1,9 @@
+[project]
+name = "a-game-api"
+version = "0.1.0"
+description = "A-Game API Service"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.139.0",
+    "uvicorn[standard]>=0.51.0",
+]

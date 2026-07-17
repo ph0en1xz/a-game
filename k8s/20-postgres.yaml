@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: a-game-postgres
+  namespace: a-game
+  labels:                   # for filtering and discoverability purposes
+    app.kubernetes.io/part-of: a-game
+    app.kubernetes.io/name: a-game-postgres
+spec:
+  clusterIP: None            # headless — stable per-pod DNS
+  selector:
+    app.kubernetes.io/name: a-game-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: a-game-postgres
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+    app.kubernetes.io/name: a-game-postgres
+spec:
+  serviceName: a-game-postgres      # ties the StatefulSet to the headless Service
+  replicas: 1
+  selector:       # knows to manage PODS with this label - must match the POD template labels
+    matchLabels:
+      app.kubernetes.io/name: a-game-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: a-game-postgres
+        app.kubernetes.io/part-of: a-game
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: db-credentials
+          env:       # additional env vars that are not in the secret
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata    # subdir avoids volume-root perms issues
+          volumeMounts:      # mounts the volumeClaimTemplate to the CONTAINER
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:    # similar to health check, but for readiness to serve traffic - removed from service if unhealthy
+            exec:
+              command: ["pg_isready", "-U", "postgres", "-d", "a_game_db"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+  volumeClaimTemplates:       # gives the pod its own persistent disk
+                              # mounts the volume to the pod at /var/lib/postgresql/data
+    - metadata:
+        name: data  # needs to be same as the name of volumeMounts so it knows which volume to mount to the container
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

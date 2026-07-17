@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: a-game-brain
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+    app.kubernetes.io/name: a-game-brain
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-brain # what the Deployment looks for.
+                                           # Must match the pod template's labels (#2)
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: a-game
+        app.kubernetes.io/name: a-game-brain # matching with selector (#1)
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000 # the appuser we created in the Dockerfile
+      serviceAccountName: a-game-brain-sa
+      containers:
+        - name: brain
+          image: a-game-brain:0.1.0
+          imagePullPolicy: IfNotPresent # use the k3d-imported image; don't hit a registry
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - secretRef:
+                { name: rabbitmq-credentials }   # RABBITMQ_DEFAULT_USER / RABBITMQ_DEFAULT_PASS
+            - secretRef:
+                { name: db-credentials }         # POSTGRES_USER/PASSWORD/DB
+          env:
+            - { name: RABBITMQ_HOST, value: a-game-rabbitmq }
+            - { name: RABBITMQ_PORT, value: "5672" }
+            - { name: RABBITMQ_QUEUE, value: "sports-data-queue" }
+            - { name: REDIS_HOST, value: a-game-redis }
+            - { name: REDIS_PORT, value: "6379" }
+            - { name: POSTGRES_HOST, value: a-game-postgres }
+            - { name: POSTGRES_PORT, value: "5432" }
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false # can't become root (allowPrivilegeEscalation: false)
+            readOnlyRootFilesystem: true # and can't persist anything to disk anyway
+            capabilities:
+              drop: ["ALL"] # and even if it somehow were, has no root powers (drop: ALL)

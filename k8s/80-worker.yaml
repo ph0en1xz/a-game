@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: a-game-worker
+  namespace: a-game
+  labels:
+    app.kubernetes.io/name: a-game-worker
+    app.kubernetes.io/part-of: a-game
+spec:
+  schedule: "0 6 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  timeZone: "Etc/UTC"
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: a-game-worker
+            app.kubernetes.io/part-of: a-game
+        spec:
+          restartPolicy: Never
+          serviceAccountName: a-game-worker-sa
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000 # the appuser we created in the Dockerfile
+          containers:
+            - name: a-game-worker
+              image: a-game-worker:0.1.0          
+              imagePullPolicy: IfNotPresent # use the k3d-imported image; don't hit a registry
+              env:
+                  - { name: RABBITMQ_HOST, value: a-game-rabbitmq }
+                  - { name: RABBITMQ_PORT, value: "5672" }
+                  - { name: RABBITMQ_QUEUE, value: "sports-data-queue" }
+                  - { name: POSTGRES_HOST, value: a-game-postgres }
+                  - { name: POSTGRES_PORT, value: "5432" }
+                  - { name: SPORTS_API_URL, value: "https://api.football-data.org/v4" }
+                  - { name: SPORTS_COMPETITIONS_ENDPOINT, value: "competitions" }
+                  - { name: SPORTS_COMPETITIONS_MATCHES_ENDPOINT, value: "competitions/{code}/matches" }
+              envFrom:
+                - secretRef:
+                    { name: db-credentials }
+                - secretRef:
+                    { name: rabbitmq-credentials }
+                - secretRef:
+                    { name: sports-api-credentials }
+              securityContext:
+                allowPrivilegeEscalation: false # can't become root (allowPrivilegeEscalation: false)
+                readOnlyRootFilesystem: true # and can't persist anything to disk anyway
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { cpu: 250m, memory: 256Mi }
+        

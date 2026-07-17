@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: a-game-rabbitmq
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+    app.kubernetes.io/name: a-game-rabbitmq
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: a-game-rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+    - name: management
+      port: 15672
+      targetPort: 15672
+---
+apiVersion: apps/v1          # StatefulSet lives in the apps group, not core v1
+kind: StatefulSet
+metadata:
+  name: a-game-rabbitmq
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+    app.kubernetes.io/name: a-game-rabbitmq
+spec:
+  serviceName: a-game-rabbitmq
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-rabbitmq
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: a-game-rabbitmq
+        app.kubernetes.io/part-of: a-game
+    spec:
+      terminationGracePeriodSeconds: 10
+      securityContext:                 # image's rabbitmq user is uid 999
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999                   # makes the PVC writable by that uid
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4.1-management-alpine   # 3.12 is EOL
+          ports:
+            - name: amqp
+              containerPort: 5672
+            - name: management
+              containerPort: 15672
+          envFrom:
+            - secretRef:
+                name: rabbitmq-credentials   # RABBITMQ_DEFAULT_USER / RABBITMQ_DEFAULT_PASS
+                                             # read on FIRST boot only (empty PVC)
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }   # rabbit sizes its memory watermark from this
+  volumeClaimTemplates:
+    - metadata:
+        name: data                     # must match the volumeMounts name
+        labels:
+          app.kubernetes.io/part-of: a-game
+          app.kubernetes.io/name: a-game-rabbitmq
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

@@ -1,0 +1,87 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: a-game-network-policy
+  namespace: a-game
+spec:
+  podSelector: {}   # applies to all PODS in the namespace
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres
+  namespace: a-game
+  labels: 
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:                                       # each list item is OR'd
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-brain
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-worker
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-brain
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rabbitmq
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-rabbitmq
+  policyTypes:  
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-worker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-brain
+      ports:
+        - protocol: TCP
+          port: 5672

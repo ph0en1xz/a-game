@@ -1,0 +1,5 @@
+# python libraries
+.venv/
+__pycache__/
+
+.vscode/

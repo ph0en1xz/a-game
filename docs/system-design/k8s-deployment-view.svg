@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="660" viewBox="0 0 920 660" role="img" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title>A-Game — Kubernetes deployment view (v1)</title>
+<desc>How the v1 services map to Kubernetes workloads inside the a-game namespace: api and calc are Deployments, ingestion is a CronJob, RabbitMQ, Redis and PostgreSQL are StatefulSets with persistent volumes. An Ingress is the only public entry. Claude API and football-data.org are external egress-only dependencies; the API consumer reaches the cluster over HTTPS with an API key. Runs on k3s locally and targets EKS in production per ADR 0002.</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+<style>
+.arr { stroke: #5F5E5A; stroke-width: 1.5; fill: none; }
+.title { font-size: 13px; font-weight: 500; }
+.sub { font-size: 10px; }
+.note { font-size: 11px; fill: #5F5E5A; }
+</style>
+</defs>
+
+<text x="24" y="28" font-size="15" font-weight="600" fill="#2C2C2A">Deployment view — Kubernetes workloads (v1)</text>
+<text x="24" y="46" font-size="11" fill="#5F5E5A">ADR 0002 (EKS for learning) + ADR 0005 · k3s via k3d locally, EKS as the prod target</text>
+
+<rect x="30" y="70" width="650" height="540" rx="14" fill="none" stroke="#534AB7" stroke-width="0.75" stroke-dasharray="6 4"/>
+<text x="46" y="92" font-size="12" font-weight="600" fill="#3C3489">Kubernetes cluster — k3s (local) · EKS (prod target)</text>
+<text x="46" y="108" font-size="11" fill="#534AB7">namespace: a-game</text>
+
+<rect x="60" y="130" width="180" height="54" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="title" fill="#2C2C2A" x="150" y="150" text-anchor="middle" dominant-baseline="central">Ingress / Service</text>
+<text class="sub" fill="#444441" x="150" y="168" text-anchor="middle" dominant-baseline="central">the only public entry</text>
+
+<rect x="60" y="230" width="180" height="74" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="title" fill="#3C3489" x="150" y="250" text-anchor="middle" dominant-baseline="central">api — Deployment</text>
+<text class="sub" fill="#534AB7" x="150" y="270" text-anchor="middle" dominant-baseline="central">FastAPI · API-key auth</text>
+<text class="sub" fill="#534AB7" x="150" y="286" text-anchor="middle" dominant-baseline="central">reads Redis + Postgres</text>
+
+<rect x="260" y="230" width="190" height="74" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="title" fill="#3C3489" x="355" y="250" text-anchor="middle" dominant-baseline="central">calc — Deployment</text>
+<text class="sub" fill="#534AB7" x="355" y="270" text-anchor="middle" dominant-baseline="central">consumes RabbitMQ · writes</text>
+<text class="sub" fill="#534AB7" x="355" y="286" text-anchor="middle" dominant-baseline="central">Postgres/Redis · calls Claude</text>
+
+<rect x="470" y="230" width="190" height="74" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="title" fill="#3C3489" x="565" y="250" text-anchor="middle" dominant-baseline="central">ingestion — CronJob</text>
+<text class="sub" fill="#534AB7" x="565" y="270" text-anchor="middle" dominant-baseline="central">daily 06:00 UTC · calls football-data</text>
+<text class="sub" fill="#534AB7" x="565" y="286" text-anchor="middle" dominant-baseline="central">writes Postgres · publishes job</text>
+
+<rect x="60" y="380" width="180" height="74" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="title" fill="#2C2C2A" x="150" y="400" text-anchor="middle" dominant-baseline="central">RabbitMQ — StatefulSet</text>
+<text class="sub" fill="#444441" x="150" y="420" text-anchor="middle" dominant-baseline="central">PVC · jobs + events</text>
+<text class="sub" fill="#444441" x="150" y="436" text-anchor="middle" dominant-baseline="central">learning target (ADR 0005)</text>
+
+<rect x="260" y="380" width="190" height="74" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="title" fill="#085041" x="355" y="400" text-anchor="middle" dominant-baseline="central">Redis — StatefulSet</text>
+<text class="sub" fill="#0F6E56" x="355" y="420" text-anchor="middle" dominant-baseline="central">PVC · cache only</text>
+<text class="sub" fill="#0F6E56" x="355" y="436" text-anchor="middle" dominant-baseline="central">(removable by design)</text>
+
+<rect x="470" y="380" width="190" height="74" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="title" fill="#085041" x="565" y="400" text-anchor="middle" dominant-baseline="central">PostgreSQL — StatefulSet</text>
+<text class="sub" fill="#0F6E56" x="565" y="420" text-anchor="middle" dominant-baseline="central">PVC · facts + predictions</text>
+<text class="sub" fill="#0F6E56" x="565" y="436" text-anchor="middle" dominant-baseline="central">prod host TBD (RDS vs external)</text>
+
+<text class="note" x="60" y="500">· Internal traffic via cluster DNS (postgres:5432 · rabbitmq:5672 · redis:6379)</text>
+<text class="note" x="60" y="519">· NetworkPolicies: stores accept only their consumers; nothing but the Ingress is public</text>
+<text class="note" x="60" y="538">· Secrets: k8s Secrets locally · External Secrets → AWS Secrets Manager in cloud</text>
+<text class="note" x="60" y="557">· Images: multi-stage, non-root · same manifests carry from k3s to EKS</text>
+
+<rect x="730" y="130" width="160" height="54" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="title" fill="#2C2C2A" x="810" y="150" text-anchor="middle" dominant-baseline="central">API consumer</text>
+<text class="sub" fill="#444441" x="810" y="168" text-anchor="middle" dominant-baseline="central">HTTPS + API key</text>
+
+<rect x="730" y="250" width="160" height="54" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text class="title" fill="#712B13" x="810" y="270" text-anchor="middle" dominant-baseline="central">Claude API</text>
+<text class="sub" fill="#993C1D" x="810" y="288" text-anchor="middle" dominant-baseline="central">egress only</text>
+
+<rect x="730" y="360" width="160" height="54" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text class="title" fill="#712B13" x="810" y="380" text-anchor="middle" dominant-baseline="central">football-data.org</text>
+<text class="sub" fill="#993C1D" x="810" y="398" text-anchor="middle" dominant-baseline="central">egress only</text>
+
+<line class="arr" x1="724" y1="157" x2="246" y2="157" marker-end="url(#arrow)"/>
+<line class="arr" x1="150" y1="184" x2="150" y2="224" marker-end="url(#arrow)"/>
+<line class="arr" x1="450" y1="267" x2="724" y2="276" marker-end="url(#arrow)"/>
+<line class="arr" x1="660" y1="280" x2="724" y2="380" marker-end="url(#arrow)"/>
+
+<rect x="46" y="628" width="12" height="12" rx="3" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text class="sub" fill="#444441" x="64" y="634" dominant-baseline="central">Your services</text>
+<rect x="170" y="628" width="12" height="12" rx="3" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="sub" fill="#444441" x="188" y="634" dominant-baseline="central">Cluster infra / client</text>
+<rect x="320" y="628" width="12" height="12" rx="3" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="sub" fill="#444441" x="338" y="634" dominant-baseline="central">Data stores</text>
+<rect x="430" y="628" width="12" height="12" rx="3" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text class="sub" fill="#444441" x="448" y="634" dominant-baseline="central">External APIs</text>
+</svg>

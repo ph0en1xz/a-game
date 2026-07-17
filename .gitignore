@@ -1,0 +1,18 @@
+.env
+.env.*
+node_modules/
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+crash.*
+override.*
+*_override.*
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+*.tfplan
+*.plan

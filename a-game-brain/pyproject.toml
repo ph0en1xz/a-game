@@ -1,0 +1,14 @@
+[project]
+name = "a-game-brain"
+description = "A-Game long standing service"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "aio-pika>=10.0.1",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.139.0",
+    "pydantic-settings>=2.14.2",
+    "redis>=8.0.1",
+    "anthropic>=0.116.0",
+    "uvicorn[standard]>=0.51.0",
+] 
