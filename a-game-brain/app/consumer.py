@@ -1,7 +1,6 @@
-from multiprocessing.dummy import connection
-
 import aio_pika
 
+import json
 import logging
 
 import asyncio
@@ -44,8 +43,9 @@ async def run_consumer(state):
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():
-                    log.info(f"Received message: {message.body.decode('utf-8')}")
-                    await process_job(message.body, state.pg_pool, state.redis_client)
+                    match_id: int = json.loads(message.body)
+                    log.info("Received match %d", match_id)
+                    await process_job(match_id, state.pg_pool, state.redis_client)
     finally:
         await connection.close()
         state.is_rabbitmq_ready = False
