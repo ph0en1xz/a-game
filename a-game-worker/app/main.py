@@ -28,10 +28,13 @@ async def main():
             league_codes: list[str] = await postgres.get_league_codes(pool)
             matches: list[Match] = await sports_client.get_matches_per_competition(league_codes, client)
 
-        match_ids: list[int] = await postgres.sync_matches_per_competition(pool, matches)
-        if len(match_ids) > 0:
-            await rabbitmq.run_producer(match_ids)
-        log.info("Synced %d changed matches", len(match_ids))
+        changed: int = await postgres.sync_matches_per_competition(pool, matches)
+        log.info("Synced %d changed matches", changed)
+
+        events = await postgres.fetch_rabbit_events(pool)
+        if events:
+            await rabbitmq.run_producer([e["match_id"] for e in events])
+            await postgres.delete_rabbit_event(pool, [e["id"] for e in events])
 
     finally:
         await pool.close()

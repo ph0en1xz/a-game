@@ -9,7 +9,41 @@ import json
 
 log = logging.getLogger("worker.db")
 
-async def sync_matches_per_competition(pool: asyncpg.Pool, matches: list[Match]) -> list[int]:
+async def fetch_rabbit_events(pool: asyncpg.Pool) -> list[asyncpg.Record]:
+    """Pending outbox events, oldest first. Empty list when there is nothing to publish."""
+    QUERY = """
+        SELECT id, match_id
+        FROM a_game.rabbit_event
+        ORDER BY id
+    """
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(QUERY)
+
+    log.info("Fetched %d pending rabbit events", len(rows))
+    return rows
+
+
+async def delete_rabbit_event(pool: asyncpg.Pool, ids: list[int]) -> None:
+    """Drop events already published. Called only after a successful publish."""
+    QUERY = """
+        DELETE FROM a_game.rabbit_event
+        WHERE id = ANY($1::bigint[])
+    """
+
+    async with pool.acquire() as conn:
+        await conn.execute(QUERY, ids)
+
+    log.info("Deleted %d published rabbit events", len(ids))
+
+
+async def sync_matches_per_competition(pool: asyncpg.Pool, matches: list[Match]) -> int:
+    # Written inside the match transaction below — that atomicity is the whole point.
+    RABBIT_EVENT_QUERY = """
+        INSERT INTO a_game.rabbit_event (event_type, match_id)
+        VALUES ($1, $2)
+    """
+    
     # Only guarantee the season row exists for the match's FK — never overwrite it.
     # sync_competitions owns season data; this backfills the gap (skipped/historical seasons).
     SEASON_QUERY = """
@@ -54,10 +88,16 @@ async def sync_matches_per_competition(pool: asyncpg.Pool, matches: list[Match])
             referee_name  = excluded.referee_name,
             blob          = excluded.blob,
             ingested_at   = NOW()
+        WHERE match.status        IS DISTINCT FROM excluded.status
+           OR match.utc_date      IS DISTINCT FROM excluded.utc_date
+           OR match.home_goals    IS DISTINCT FROM excluded.home_goals
+           OR match.away_goals    IS DISTINCT FROM excluded.away_goals
+           OR match.home_goals_ht IS DISTINCT FROM excluded.home_goals_ht
+           OR match.away_goals_ht IS DISTINCT FROM excluded.away_goals_ht
         RETURNING id
     """
     
-    ids: list[int] = []
+    changed = 0
     for match in matches:
         teams = [match["homeTeam"], match["awayTeam"]]
         season = match["season"]
@@ -101,11 +141,17 @@ async def sync_matches_per_competition(pool: asyncpg.Pool, matches: list[Match])
                     referees[0]["name"] if referees else None,
                     json.dumps(match),
                 )
+                # No row means the change gate found nothing new — no event owed.
                 if row is not None:
-                    ids.append(row["id"])
+                    changed += 1
+                    await conn.execute(
+                        RABBIT_EVENT_QUERY,
+                        "match.changed",
+                        row["id"],
+                    )
 
-    log.info("Synced %d changed matches of %d fetched", len(ids), len(matches))
-    return ids
+    log.info("Synced %d changed matches of %d fetched", changed, len(matches))
+    return changed
 
 
 async def get_league_codes(pool: asyncpg.Pool) -> list[str]:
