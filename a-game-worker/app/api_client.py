@@ -5,6 +5,7 @@ import asyncio
 import logging
 
 from app.config import settings
+from app.model import Match
 
 log = logging.getLogger("worker.api_client")
 
@@ -60,7 +61,7 @@ async def get_all_competitions(client: httpx.AsyncClient) -> list[dict]:
   return competitions
 
 
-async def get_matches_per_competition(league_codes: list[str], client: httpx.AsyncClient) -> list[list[dict]]:
+async def get_matches_per_competition(league_codes: list[str], client: httpx.AsyncClient) -> list[Match]:
   """Returns upcoming matches per competition — the response is an envelope
   {"count": 13, "resultSet": {...}, "competition: {...}", "matches": [...]}."""
   
@@ -72,14 +73,14 @@ async def get_matches_per_competition(league_codes: list[str], client: httpx.Asy
     "dateTo": one_week.isoformat(),
   }
 
-  matches_per_comp: list[list[dict]] = []
+  matches: list[Match] = []
   for code in league_codes:
     await asyncio.sleep(2)
     url = settings.sports_competitions_matches_endpoint.format(code=code)
     resp = await _get(client, url, params=params)
 
-    matches: list[dict] = resp.json()["matches"]
-    log.info("Fetched %d matches for %s", len(matches), code)
-    matches_per_comp.append(matches)
+    league_matches = resp.json()["matches"]
+    log.info("Fetched %d matches for %s", len(league_matches), code)
+    matches.extend(league_matches)
 
-  return matches_per_comp
+  return matches
