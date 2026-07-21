@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from enum import Enum
+
+import models.prediction as Prediction
+
 from app.__version__ import __version__
 
 app = FastAPI(
@@ -28,3 +31,7 @@ def healthz() -> Health:
 @app.get("/readyz", response_model=Health)
 def readyz() -> Health:
     return Health(status=HealthStatus.READY, version=__version__)
+
+@app.post("/{team}", response_model=Prediction)
+def prediction() -> Prediction:
+    return Prediction(description="dummy description", match="Chelse FC vs Man Utd") # dummy response for now
