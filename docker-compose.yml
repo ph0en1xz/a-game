@@ -16,6 +16,24 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:4.0-management-alpine
+    container_name: a-game-rabbit
+    restart: always
+    ports: 
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
   db:
     image: postgres:16-alpine
     container_name: a-game-postgres
@@ -37,3 +55,4 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:
