@@ -13,6 +13,7 @@ change-gated ingestion). Open any `.svg` in a browser or VS Code.
 | 3 | [`flow-2-api-request.svg`](flow-2-api-request.svg) | What happens on every API call: key auth → cache → Postgres. Plain reads, no computation, no pending states |
 | 4 | [`flow-3-phase2-websocket.svg`](flow-3-phase2-websocket.svg) | **Phase 2 only** (not built in v1): how push updates will reach the Next.js client via RabbitMQ |
 | 5 | [`k8s-deployment-view.svg`](k8s-deployment-view.svg) | How the pieces map to Kubernetes workloads: Deployments (api, calc), CronJob (ingestion), StatefulSets (RabbitMQ, Redis, Postgres) |
+| 6 | [`network-topology.html`](network-topology.html) | The AWS network layer: how a public ALB in the public subnets routes inbound traffic to api pods in the private subnets across two AZs, plus route tables and NAT egress |
 
 ## The design in three sentences
 
@@ -35,5 +36,6 @@ RabbitMQ is deliberately adopted as a learning target.
 
 ## Maintenance
 
-These diagrams are hand-maintained SVG. Any ADR that changes the architecture must update
-the affected diagrams **in the same change**.
+Diagrams 1–5 are hand-maintained SVG; `network-topology.html` is a self-contained HTML page
+(inline CSS, no external assets) — open any of them in a browser. Any ADR that changes the
+architecture must update the affected diagrams **in the same change**.

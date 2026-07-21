@@ -1,5 +1,5 @@
 provider "aws" {
-  region     = "us-east-1"
+  region     = var.region
   access_key = "test"
   secret_key = "test"
 
@@ -13,5 +13,14 @@ provider "aws" {
     sts = "http://localhost:4566"
     iam = "http://localhost:4566"
     ec2 = "http://localhost:4566" # VPC / subnets / IGW / NAT all use the EC2 API
+  }
+
+  # default_tags = every resource gets tagged automatically, so you never forget one.
+  default_tags {
+    tags = {
+      project     = var.project
+      environment = var.environment
+      managed-by  = "terraform"
+    }
   }
 }

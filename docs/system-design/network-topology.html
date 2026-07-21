@@ -1,0 +1,335 @@
+<title>A-Game VPC — public ALB to private pods</title>
+<style>
+  :root {
+    --bg: #f5f7f9;
+    --surface: #ffffff;
+    --ink: #111820;
+    --muted: #5a6572;
+    --line: #d5dce4;
+    --vpc-line: #7a8794;
+    --pub: #2563eb;
+    --pub-bg: #eef4ff;
+    --pub-line: #bcd2ff;
+    --priv: #15803d;
+    --priv-bg: #edf6ef;
+    --priv-line: #bfe3c6;
+    --flow: #e2620c;
+    --flow-bg: #fdeede;
+    --egress: #6b7684;
+    --node: #6d28d9;
+    --node-bg: #f1ecfd;
+    --node-line: #d3c4f5;
+    --radius: 7px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1218; --surface: #151d26; --ink: #eef2f6; --muted: #93a1b0;
+      --line: #29323d; --vpc-line: #47525f; --pub: #6ea8fe; --pub-bg: #14233c;
+      --pub-line: #274a7a; --priv: #55d07f; --priv-bg: #10261a; --priv-line: #234f33;
+      --flow: #fb923c; --flow-bg: #37220f; --egress: #8593a2;
+      --node: #b191f2; --node-bg: #241a3d; --node-line: #40316a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1218; --surface: #151d26; --ink: #eef2f6; --muted: #93a1b0;
+    --line: #29323d; --vpc-line: #47525f; --pub: #6ea8fe; --pub-bg: #14233c;
+    --pub-line: #274a7a; --priv: #55d07f; --priv-bg: #10261a; --priv-line: #234f33;
+    --flow: #fb923c; --flow-bg: #37220f; --egress: #8593a2;
+    --node: #b191f2; --node-bg: #241a3d; --node-line: #40316a;
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f7f9; --surface: #ffffff; --ink: #111820; --muted: #5a6572;
+    --line: #d5dce4; --vpc-line: #7a8794; --pub: #2563eb; --pub-bg: #eef4ff;
+    --pub-line: #bcd2ff; --priv: #15803d; --priv-bg: #edf6ef; --priv-line: #bfe3c6;
+    --flow: #e2620c; --flow-bg: #fdeede; --egress: #6b7684;
+    --node: #6d28d9; --node-bg: #f1ecfd; --node-line: #d3c4f5;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 24px 64px; }
+
+  header { margin-bottom: 28px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 8px;
+  }
+  h1 { font-size: clamp(22px, 4vw, 30px); line-height: 1.15; margin: 0 0 8px; text-wrap: balance; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 62ch; margin: 0; }
+
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  .chip {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 10px 18px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .chip .k { font-weight: 650; font-size: 14px; }
+  .chip .s { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+  .conn { width: 2px; background: var(--flow); position: relative; }
+  .conn.h22 { height: 22px; }
+  .conn.h16 { height: 16px; }
+  .conn::after {
+    content: ""; position: absolute; bottom: -1px; left: 50%; transform: translateX(-50%);
+    border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid var(--flow);
+  }
+  .conn .tag {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%); white-space: nowrap;
+    font-family: var(--mono); font-size: 11px; color: var(--flow);
+    background: var(--flow-bg); padding: 1px 7px; border-radius: 4px;
+  }
+
+  .vpc {
+    width: 100%; border: 1.5px dashed var(--vpc-line); border-radius: 12px;
+    padding: 16px; margin-top: 4px; background: color-mix(in srgb, var(--surface) 40%, transparent);
+  }
+  .vpc-label { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .vpc-label .name { font-weight: 700; font-size: 13px; letter-spacing: 0.04em; }
+  .vpc-label .cidr { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  .alb {
+    border: 1px solid var(--flow); background: var(--flow-bg); border-radius: var(--radius);
+    padding: 12px 16px; text-align: center;
+  }
+  .alb .k { font-weight: 700; color: var(--flow); font-size: 14px; }
+  .alb .s { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .alb .meta {
+    font-family: var(--mono); font-size: 11px; color: var(--flow);
+    margin-top: 7px; display: flex; gap: 6px 14px; justify-content: center; flex-wrap: wrap;
+  }
+
+  .fanout { display: flex; justify-content: center; height: 16px; }
+  .fanout .conn { height: 16px; }
+
+  .azs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 2px; }
+  .az { display: flex; flex-direction: column; gap: 0; }
+  .az-head {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+
+  .subnet { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+  .subnet.public { background: var(--pub-bg); border-color: var(--pub-line); }
+  .subnet.private { background: var(--priv-bg); border-color: var(--priv-line); }
+  .subnet .tier { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; display: flex; align-items: center; gap: 7px; }
+  .subnet.public .tier { color: var(--pub); }
+  .subnet.private .tier { color: var(--priv); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .subnet.public .dot { background: var(--pub); }
+  .subnet.private .dot { background: var(--priv); }
+  .subnet .cidr { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin: 3px 0 9px; }
+
+  .resrow { display: flex; flex-wrap: wrap; gap: 6px; }
+  .box {
+    background: var(--node-bg); border: 1px solid var(--node-line); border-radius: 5px;
+    padding: 5px 9px; font-size: 12px; font-weight: 600; color: var(--node);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .box.nat, .box.eni { color: var(--muted); border-color: var(--line); background: var(--surface); }
+  .box .port { font-family: var(--mono); font-weight: 500; font-size: 10.5px; opacity: 0.85; }
+
+  .node-wrap {
+    border: 1px dashed var(--priv-line); border-radius: 6px; padding: 7px;
+    background: color-mix(in srgb, var(--surface) 55%, transparent);
+  }
+  .node-wrap .nlabel {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--priv); margin-bottom: 5px;
+  }
+
+  .routeline {
+    font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+    border-top: 1px dotted var(--line); padding-top: 7px; margin-top: 9px;
+  }
+  .routeline .rt { font-weight: 700; color: var(--ink); opacity: 0.75; }
+
+  /* the two-way connector between public and private subnet within an AZ */
+  .cross { display: flex; justify-content: center; gap: 34px; height: 42px; position: relative; }
+  .arrow { position: relative; width: 2px; }
+  .arrow .lbl {
+    position: absolute; top: 50%; transform: translateY(-50%); white-space: nowrap;
+    font-family: var(--mono); font-size: 10px; padding: 1px 5px; border-radius: 4px;
+  }
+  .arrow.down { background: var(--flow); }
+  .arrow.down .lbl { left: 8px; color: var(--flow); background: var(--flow-bg); }
+  .arrow.down::after {
+    content: ""; position: absolute; bottom: -1px; left: 50%; transform: translateX(-50%);
+    border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid var(--flow);
+  }
+  .arrow.up { background: repeating-linear-gradient(var(--egress) 0 4px, transparent 4px 8px); }
+  .arrow.up .lbl { right: 8px; color: var(--egress); background: var(--bg); }
+  .arrow.up::after {
+    content: ""; position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+    border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid var(--egress);
+  }
+
+  /* request walkthrough */
+  .walk { margin-top: 34px; border-top: 1px solid var(--line); padding-top: 24px; }
+  .walk h2 { font-size: 15px; margin: 0 0 14px; letter-spacing: 0.01em; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .steps li { display: flex; gap: 12px; align-items: baseline; }
+  .steps .n {
+    font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--flow);
+    background: var(--flow-bg); border-radius: 5px; padding: 2px 8px; flex: none; min-width: 26px; text-align: center;
+  }
+  .steps .t { font-size: 13.5px; }
+  .steps .t b { font-weight: 650; }
+  .steps .t code { font-family: var(--mono); font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+
+  .legend {
+    margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px 24px; border-top: 1px solid var(--line); padding-top: 20px;
+  }
+  .legend .item { display: flex; gap: 10px; font-size: 13px; align-items: flex-start; }
+  .legend .swatch { width: 14px; height: 14px; border-radius: 4px; flex: none; margin-top: 2px; border: 1px solid rgba(0,0,0,0.08); }
+  .legend .line-sw { width: 18px; height: 0; flex: none; margin-top: 8px; }
+  .legend .item b { display: block; font-size: 13px; }
+  .legend .item span { color: var(--muted); font-size: 12.5px; }
+
+  .notes { margin-top: 24px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 7px; }
+  .notes b { color: var(--ink); font-weight: 650; }
+  .notes .mono { font-family: var(--mono); font-size: 12px; }
+
+  @media (max-width: 580px) {
+    .azs { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">A-Game · network layer · dev</p>
+    <h1>How the public ALB reaches your pods</h1>
+    <p class="lede">The load balancer lives in the <b>public</b> subnets and forwards to API pods running on EKS nodes in the <b>private</b> subnets. Inbound traffic comes down the orange path; the pods reach the internet back out through the NAT gateway.</p>
+  </header>
+
+  <div class="stage">
+
+    <div class="chip">
+      <div class="k">☁ Internet</div>
+      <div class="s">customer / API client → api.a-game.dev</div>
+    </div>
+
+    <div class="conn h22"><span class="tag">HTTPS :443</span></div>
+
+    <div class="chip">
+      <div class="k">Internet Gateway (IGW)</div>
+      <div class="s">the VPC's only door to the public internet</div>
+    </div>
+
+    <div class="conn h16"></div>
+
+    <div class="vpc">
+      <div class="vpc-label">
+        <span class="name">VPC</span>
+        <span class="cidr">10.0.0.0/16 · region eu-west-1</span>
+      </div>
+
+      <div class="alb">
+        <div class="k">Public Application Load Balancer — internet-facing</div>
+        <div class="s">one shared ALB, an interface in each public subnet · created by the AWS Load Balancer Controller from your Kubernetes Ingress</div>
+        <div class="meta">
+          <span>listener :443 → TLS terminated here</span>
+          <span>target group → pods :8000</span>
+        </div>
+      </div>
+
+      <div class="fanout"><div class="conn"></div></div>
+
+      <div class="azs">
+        <!-- AZ A -->
+        <div class="az">
+          <div class="az-head">Availability Zone · eu-west-1a</div>
+          <div class="subnet public">
+            <div class="tier"><span class="dot"></span>Public subnet</div>
+            <div class="cidr">10.0.0.0/24 · tag kubernetes.io/role/elb = 1</div>
+            <div class="resrow">
+              <span class="box eni">ALB interface</span>
+              <span class="box nat">NAT Gateway</span>
+            </div>
+            <div class="routeline"><span class="rt">Route table →</span> 0.0.0.0/0 via Internet Gateway</div>
+          </div>
+
+          <div class="cross">
+            <div class="arrow down"><span class="lbl">ALB → pod :8000</span></div>
+            <div class="arrow up"><span class="lbl">egress → NAT</span></div>
+          </div>
+
+          <div class="subnet private">
+            <div class="tier"><span class="dot"></span>Private subnet</div>
+            <div class="cidr">10.0.10.0/24 · tag kubernetes.io/role/internal-elb = 1</div>
+            <div class="node-wrap">
+              <div class="nlabel">EKS worker node</div>
+              <div class="resrow">
+                <span class="box">api pod <span class="port">:8000</span></span>
+                <span class="box">api pod <span class="port">:8000</span></span>
+              </div>
+            </div>
+            <div class="routeline"><span class="rt">Route table →</span> 0.0.0.0/0 via NAT Gateway</div>
+          </div>
+        </div>
+
+        <!-- AZ B -->
+        <div class="az">
+          <div class="az-head">Availability Zone · eu-west-1b</div>
+          <div class="subnet public">
+            <div class="tier"><span class="dot"></span>Public subnet</div>
+            <div class="cidr">10.0.1.0/24 · tag kubernetes.io/role/elb = 1</div>
+            <div class="resrow">
+              <span class="box eni">ALB interface</span>
+            </div>
+            <div class="routeline"><span class="rt">Route table →</span> 0.0.0.0/0 via Internet Gateway</div>
+          </div>
+
+          <div class="cross">
+            <div class="arrow down"><span class="lbl">ALB → pod :8000</span></div>
+            <div class="arrow up"><span class="lbl">egress → NAT</span></div>
+          </div>
+
+          <div class="subnet private">
+            <div class="tier"><span class="dot"></span>Private subnet</div>
+            <div class="cidr">10.0.11.0/24 · tag kubernetes.io/role/internal-elb = 1</div>
+            <div class="node-wrap">
+              <div class="nlabel">EKS worker node</div>
+              <div class="resrow">
+                <span class="box">api pod <span class="port">:8000</span></span>
+                <span class="box">api pod <span class="port">:8000</span></span>
+              </div>
+            </div>
+            <div class="routeline"><span class="rt">Route table →</span> 0.0.0.0/0 via NAT Gateway (in AZ-a)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="walk">
+    <h2>The inbound request, step by step</h2>
+    <ol class="steps">
+      <li><span class="n">1</span><span class="t">A client resolves <code>api.a-game.dev</code> to the ALB and opens an <b>HTTPS</b> connection on <code>:443</code>.</span></li>
+      <li><span class="n">2</span><span class="t">Traffic enters the VPC through the <b>Internet Gateway</b> and hits the <b>ALB interface</b> in a public subnet.</span></li>
+      <li><span class="n">3</span><span class="t">The ALB <b>terminates TLS</b>, checks its target group for a <b>healthy pod</b>, and load-balances across AZs.</span></li>
+      <li><span class="n">4</span><span class="t">It forwards the request to an <b>api pod</b> on an EKS node in a <b>private subnet</b>, on <code>:8000</code> — the pod itself is never exposed to the internet.</span></li>
+    </ol>
+    <ol class="steps" style="margin-top:14px;">
+      <li><span class="n" style="color:var(--egress);background:var(--surface);border:1px solid var(--line);">↩</span><span class="t"><b>Egress:</b> when a pod calls out (e.g. <code>football-data.org</code>), its route table sends <code>0.0.0.0/0</code> to the <b>NAT Gateway</b>, which fronts the request with a public IP. Nothing on the internet can start a connection back in.</span></li>
+    </ol>
+  </div>
+
+  <div class="legend">
+    <div class="item"><span class="line-sw" style="border-top:3px solid var(--flow)"></span><div><b>Inbound request</b><span>Internet → IGW → ALB → pod</span></div></div>
+    <div class="item"><span class="line-sw" style="border-top:3px dashed var(--egress)"></span><div><b>Outbound egress</b><span>pod → NAT → IGW → internet</span></div></div>
+    <div class="item"><span class="swatch" style="background:var(--pub)"></span><div><b>Public subnet</b><span>ALB interface + NAT only — no app pods</span></div></div>
+    <div class="item"><span class="swatch" style="background:var(--priv)"></span><div><b>Private subnet</b><span>EKS nodes + api pods live here</span></div></div>
+  </div>
+
+  <div class="notes">
+    <div><b>The subnet tags are placement hints for the LB Controller.</b> <span class="mono">role/elb</span> = "internet-facing ALBs land here"; <span class="mono">role/internal-elb</span> reserves the private tier for an internal LB you may never create.</div>
+    <div><b>Two subnets per tier, one per AZ,</b> so a single AZ failure doesn't take the API down — the ALB just routes to pods in the surviving zone.</div>
+    <div><b>On LocalStack</b> the ALB and NAT are mocked — they show up in state but don't route real traffic. This all comes alive only against real AWS + EKS.</div>
+  </div>
+</div>

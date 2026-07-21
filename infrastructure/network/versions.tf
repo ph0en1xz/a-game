@@ -13,7 +13,7 @@ terraform {
   backend "s3" {
     bucket = "a-game-tfstate"
     key    = "network/dev/terraform.tfstate"
-    region = "us-east-1"
+    region = "eu-west-1"
 
     use_lockfile = true # S3-native locking (no DynamoDB)
 
