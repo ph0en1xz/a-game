@@ -13,7 +13,8 @@ data "terraform_remote_state" "network" {
     skip_region_validation      = true
 
     endpoints = {
-      s3 = "http://localhost:4566"
+      s3  = "http://localhost:4566"
+      sts = "http://localhost:4566"
     }
   }
 }
