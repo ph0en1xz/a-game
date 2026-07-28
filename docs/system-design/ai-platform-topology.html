@@ -1,0 +1,376 @@
+<title>A-Game AI platform — gateway, tracing, orchestration</title>
+<style>
+  :root {
+    --bg: #f5f7f9;
+    --surface: #ffffff;
+    --ink: #111820;
+    --muted: #5a6572;
+    --line: #d5dce4;
+    --cluster-line: #7a8794;
+    --flow: #e2620c;
+    --flow-bg: #fdeede;
+    --egress: #6b7684;
+    --ai: #6d28d9;
+    --ai-bg: #f1ecfd;
+    --ai-line: #d3c4f5;
+    --data: #15803d;
+    --data-bg: #edf6ef;
+    --data-line: #bfe3c6;
+    --ext: #9a3412;
+    --ext-bg: #fdf1e7;
+    --ext-line: #f0cdaf;
+    --radius: 7px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1218; --surface: #151d26; --ink: #eef2f6; --muted: #93a1b0;
+      --line: #29323d; --cluster-line: #47525f;
+      --flow: #fb923c; --flow-bg: #37220f; --egress: #8593a2;
+      --ai: #b191f2; --ai-bg: #241a3d; --ai-line: #40316a;
+      --data: #55d07f; --data-bg: #10261a; --data-line: #234f33;
+      --ext: #f0a375; --ext-bg: #34210f; --ext-line: #5c3a1c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1218; --surface: #151d26; --ink: #eef2f6; --muted: #93a1b0;
+    --line: #29323d; --cluster-line: #47525f;
+    --flow: #fb923c; --flow-bg: #37220f; --egress: #8593a2;
+    --ai: #b191f2; --ai-bg: #241a3d; --ai-line: #40316a;
+    --data: #55d07f; --data-bg: #10261a; --data-line: #234f33;
+    --ext: #f0a375; --ext-bg: #34210f; --ext-line: #5c3a1c;
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f7f9; --surface: #ffffff; --ink: #111820; --muted: #5a6572;
+    --line: #d5dce4; --cluster-line: #7a8794;
+    --flow: #e2620c; --flow-bg: #fdeede; --egress: #6b7684;
+    --ai: #6d28d9; --ai-bg: #f1ecfd; --ai-line: #d3c4f5;
+    --data: #15803d; --data-bg: #edf6ef; --data-line: #bfe3c6;
+    --ext: #9a3412; --ext-bg: #fdf1e7; --ext-line: #f0cdaf;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 24px 64px; }
+
+  header { margin-bottom: 28px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 8px;
+  }
+  h1 { font-size: clamp(22px, 4vw, 30px); line-height: 1.15; margin: 0 0 8px; text-wrap: balance; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 15px; max-width: 64ch; margin: 0; }
+
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  .chip {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 10px 18px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.04); max-width: 100%;
+  }
+  .chip .k { font-weight: 650; font-size: 14px; }
+  .chip .s { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .chip.orch { border-color: var(--ai-line); background: var(--ai-bg); }
+  .chip.orch .k { color: var(--ai); }
+
+  .conn { width: 2px; background: var(--flow); position: relative; flex: none; }
+  .conn.h22 { height: 22px; }
+  .conn.h16 { height: 16px; }
+  .conn.h30 { height: 30px; }
+  .conn::after {
+    content: ""; position: absolute; bottom: -1px; left: 50%; transform: translateX(-50%);
+    border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid var(--flow);
+  }
+  .conn .tag {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%); white-space: nowrap;
+    font-family: var(--mono); font-size: 11px; color: var(--flow);
+    background: var(--flow-bg); padding: 1px 7px; border-radius: 4px;
+  }
+
+  .cluster {
+    width: 100%; border: 1.5px dashed var(--cluster-line); border-radius: 12px;
+    padding: 16px; margin-top: 4px; background: color-mix(in srgb, var(--surface) 40%, transparent);
+  }
+  .cluster-label { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cluster-label .name { font-weight: 700; font-size: 13px; letter-spacing: 0.04em; }
+  .cluster-label .sub { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  .spine { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  .node {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 9px 15px; text-align: center; min-width: 220px;
+  }
+  .node .k { font-weight: 650; font-size: 13.5px; }
+  .node .s { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .node.data { border-color: var(--data-line); background: var(--data-bg); }
+  .node.data .k { color: var(--data); }
+
+  /* the gateway centerpiece */
+  .gateway {
+    border: 1.5px solid var(--ai); background: var(--ai-bg); border-radius: var(--radius);
+    padding: 13px 18px; text-align: center; min-width: 300px; position: relative;
+  }
+  .gateway .k { font-weight: 750; color: var(--ai); font-size: 15px; }
+  .gateway .s { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .gateway .meta {
+    font-family: var(--mono); font-size: 10.5px; color: var(--ai);
+    margin-top: 8px; display: flex; gap: 5px 12px; justify-content: center; flex-wrap: wrap;
+  }
+  .gateway .cred {
+    margin-top: 8px; font-size: 11.5px; color: var(--ink); opacity: 0.82;
+    border-top: 1px dotted var(--ai-line); padding-top: 7px;
+  }
+  .gateway .cred b { color: var(--ai); }
+
+  /* a node with a side branch (pgvector / langfuse) */
+  .withside { display: flex; align-items: center; justify-content: center; gap: 0; width: 100%; }
+  .withside .core { display: flex; flex-direction: column; align-items: center; }
+  .branch { display: flex; align-items: center; flex: none; }
+  .branch .link {
+    height: 2px; width: 34px;
+    background: repeating-linear-gradient(90deg, var(--ai) 0 5px, transparent 5px 9px);
+    position: relative;
+  }
+  .branch .link .bl {
+    position: absolute; top: -17px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+    font-family: var(--mono); font-size: 9.5px; color: var(--ai);
+    background: var(--ai-bg); padding: 0 4px; border-radius: 3px;
+  }
+  .side {
+    border: 1px solid var(--ai-line); background: var(--ai-bg); border-radius: 6px;
+    padding: 8px 12px; text-align: left; min-width: 130px;
+  }
+  .side .k { font-weight: 650; font-size: 12.5px; color: var(--ai); }
+  .side .s { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .side.sub { border-style: dashed; opacity: 0.9; }
+
+  /* single egress hop leaving the cluster */
+  .egress-row { display: flex; justify-content: center; margin: 0; }
+  .egress {
+    display: flex; align-items: center; gap: 0;
+  }
+  .egress .up {
+    width: 2px; height: 40px;
+    background: repeating-linear-gradient(var(--egress) 0 4px, transparent 4px 8px);
+    position: relative;
+  }
+  .egress .up::after {
+    content: ""; position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+    border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid var(--egress);
+  }
+  .egress .up .lbl {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%); white-space: nowrap;
+    font-family: var(--mono); font-size: 10.5px; color: var(--egress); background: var(--bg); padding: 1px 5px; border-radius: 4px;
+  }
+  .ext {
+    border: 1px solid var(--ext-line); background: var(--ext-bg); border-radius: var(--radius);
+    padding: 10px 16px; text-align: center;
+  }
+  .ext .k { font-weight: 700; color: var(--ext); font-size: 13.5px; }
+  .ext .s { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .ci {
+    margin-top: 20px; border: 1px dashed var(--line); border-radius: var(--radius);
+    padding: 12px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    background: color-mix(in srgb, var(--surface) 50%, transparent);
+  }
+  .ci .badge {
+    font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    color: var(--ai); background: var(--ai-bg); border: 1px solid var(--ai-line);
+    border-radius: 5px; padding: 4px 9px; flex: none;
+  }
+  .ci .txt { font-size: 13px; color: var(--muted); }
+  .ci .txt b { color: var(--ink); font-weight: 650; }
+
+  .tierpill {
+    font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; border-radius: 4px; padding: 1px 6px; margin-left: 8px; vertical-align: middle;
+  }
+  .tierpill.t1 { color: var(--ai); background: var(--ai-bg); border: 1px solid var(--ai-line); }
+  .tierpill.t2 { color: var(--muted); background: var(--surface); border: 1px solid var(--line); }
+
+  .walk { margin-top: 34px; border-top: 1px solid var(--line); padding-top: 24px; }
+  .walk h2 { font-size: 15px; margin: 0 0 14px; letter-spacing: 0.01em; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .steps li { display: flex; gap: 12px; align-items: baseline; }
+  .steps .n {
+    font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--flow);
+    background: var(--flow-bg); border-radius: 5px; padding: 2px 8px; flex: none; min-width: 26px; text-align: center;
+  }
+  .steps .t { font-size: 13.5px; }
+  .steps .t b { font-weight: 650; }
+  .steps .t code { font-family: var(--mono); font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+
+  .legend {
+    margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px 24px; border-top: 1px solid var(--line); padding-top: 20px;
+  }
+  .legend .item { display: flex; gap: 10px; font-size: 13px; align-items: flex-start; }
+  .legend .swatch { width: 14px; height: 14px; border-radius: 4px; flex: none; margin-top: 2px; border: 1px solid rgba(0,0,0,0.08); }
+  .legend .line-sw { width: 18px; height: 0; flex: none; margin-top: 8px; }
+  .legend .item b { display: block; font-size: 13px; }
+  .legend .item span { color: var(--muted); font-size: 12.5px; }
+
+  .notes { margin-top: 24px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 7px; }
+  .notes b { color: var(--ink); font-weight: 650; }
+  .notes .mono { font-family: var(--mono); font-size: 12px; }
+
+  @media (max-width: 640px) {
+    .withside { flex-direction: column; }
+    .branch { flex-direction: column; }
+    .branch .link { width: 2px; height: 22px; background: repeating-linear-gradient(var(--ai) 0 5px, transparent 5px 9px); }
+    .branch .link .bl { position: static; transform: none; margin: 4px 0; }
+    .node, .gateway { min-width: 0; width: 100%; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">A-Game · AI platform layer · ADR 0008</p>
+    <h1>The platform around the models — gateway, tracing, evals, orchestration</h1>
+    <p class="lede">The daily pipeline already predicts (Elo + Poisson) and narrates (Claude Haiku). This layer wraps that LLM call in the operational surface an AI platform needs: one controlled egress hop, per-request cost/latency tracing, retrieval grounding, and DAG orchestration — all as ordinary private-subnet workloads. The numbers being predicted don't change.</p>
+  </header>
+
+  <div class="stage">
+
+    <!-- daily scheduler (NOT a per-service timer) -->
+    <div class="chip orch">
+      <div class="k">Daily scheduler · 06:00 UTC</div>
+      <div class="s">CronJob today → Argo Workflows (Tier 2) · runs ingestion, not calc</div>
+    </div>
+    <div class="conn h30"><span class="tag">runs ingestion</span></div>
+
+    <!-- the cluster / private subnets -->
+    <div class="cluster">
+      <div class="cluster-label">
+        <span class="name">EKS cluster · private subnets</span>
+        <span class="sub">no public ALB — none of these are internet-facing</span>
+      </div>
+
+      <div class="spine">
+
+        <div class="node">
+          <div class="k">ingest</div>
+          <div class="s">upsert · change-gated (ADR 0007)</div>
+        </div>
+        <div class="conn h22"><span class="tag">publishes "data ready" on change</span></div>
+        <div class="node">
+          <div class="k">RabbitMQ</div>
+          <div class="s">event bus · decouples the trigger</div>
+        </div>
+        <div class="conn h22"><span class="tag">calc consumes &amp; reacts</span></div>
+        <div class="node">
+          <div class="k">calc / predict</div>
+          <div class="s">Elo + Poisson · long-running consumer · unchanged</div>
+        </div>
+        <div class="conn h22"></div>
+
+        <!-- commentary with pgvector side branch -->
+        <div class="withside">
+          <div class="core">
+            <div class="node">
+              <div class="k">commentary.py</div>
+              <div class="s">builds the preview prompt</div>
+            </div>
+          </div>
+          <div class="branch">
+            <div class="link"><span class="bl">retrieves</span></div>
+            <div class="side sub">
+              <div class="k">pgvector<span class="tierpill t2">T2</span></div>
+              <div class="s">similar matches</div>
+              <div class="s">in Postgres</div>
+            </div>
+          </div>
+        </div>
+        <div class="conn h22"><span class="tag">cluster-internal call</span></div>
+
+        <!-- the gateway centerpiece, with Langfuse side branch -->
+        <div class="withside">
+          <div class="core">
+            <div class="gateway">
+              <div class="k">LiteLLM gateway<span class="tierpill t1">Tier 1</span></div>
+              <div class="s">every LLM call routes through one hop</div>
+              <div class="meta"><span>rate-limit</span><span>budget cap</span><span>cache</span><span>retry</span><span>fallback</span></div>
+              <div class="cred"><b>Only</b> holder of the Anthropic credential · <b>only</b> pod with egress to Anthropic</div>
+            </div>
+          </div>
+          <div class="branch">
+            <div class="link"><span class="bl">emits trace</span></div>
+            <div class="side">
+              <div class="k">Langfuse<span class="tierpill t1">T1</span></div>
+              <div class="s">tokens · cost · latency</div>
+              <div class="s">prompt · response</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- egress hop up and out -->
+        <div class="egress-row">
+          <div class="egress">
+            <div class="up"><span class="lbl">the one egress hop · :443</span></div>
+          </div>
+        </div>
+        <div class="ext">
+          <div class="k">api.anthropic.com</div>
+          <div class="s">Claude Haiku · outside the VPC</div>
+        </div>
+
+        <div class="conn h30"><span class="tag">store predictions + previews</span></div>
+        <div class="node data">
+          <div class="k">Postgres · Redis</div>
+          <div class="s">system of record + cache · unchanged</div>
+        </div>
+        <div class="conn h22"></div>
+        <div class="node">
+          <div class="k">FastAPI · GET endpoints</div>
+          <div class="s">plain reads · no per-request compute (ADR 0003)</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CI eval gate lane -->
+    <div class="ci" style="width:100%">
+      <span class="badge">CI · GitHub Actions<span class="tierpill t1" style="margin-left:6px">Tier 1</span></span>
+      <span class="txt"><b>Eval harness gates every merge:</b> structured-output validation · factuality vs. real stats · regression on a fixed fixture set. A regression blocks the merge.</span>
+    </div>
+
+  </div>
+
+  <!-- request walkthrough -->
+  <div class="walk">
+    <h2>One preview, end to end</h2>
+    <ol class="steps">
+      <li><span class="n">1</span><span class="t">The <b>daily scheduler</b> (06:00 UTC — CronJob today, Argo in Tier 2) runs <b>ingestion</b>. If the upsert changed anything (ADR 0007) it publishes a <b>"data ready"</b> event; the <b>calc</b> consumer reacts off RabbitMQ and recomputes Elo + Poisson. Calc is never run on a timer.</span></li>
+      <li><span class="n">2</span><span class="t"><b>commentary.py</b> builds the prompt — and (Tier 2) pulls similar historical matches from <code>pgvector</code> to ground it.</span></li>
+      <li><span class="n">3</span><span class="t">It calls the <b>LiteLLM gateway</b> at its cluster-internal Service address — not Anthropic directly. The gateway checks the budget, tries the cache, and holds the only credential.</span></li>
+      <li><span class="n">4</span><span class="t">On a cache miss the gateway makes <b>the one egress call</b> to <code>api.anthropic.com:443</code> — the single pod-to-internet hop the NetworkPolicy has to allow.</span></li>
+      <li><span class="n">5</span><span class="t">The gateway <b>emits a trace to Langfuse</b> — tokens, cost, latency, prompt, response, model version — then returns the preview.</span></li>
+      <li><span class="n">6</span><span class="t">The preview lands in <b>Postgres</b> (model-versioned) and warms <b>Redis</b>; FastAPI serves it later as a plain read.</span></li>
+      <li><span class="n">7</span><span class="t">Separately, <b>CI</b> runs the eval harness on every change and blocks the merge if output quality regresses.</span></li>
+    </ol>
+  </div>
+
+  <!-- legend -->
+  <div class="legend">
+    <div class="item"><span class="swatch" style="background:var(--ai-bg);border-color:var(--ai-line)"></span><div><b>AI platform (this layer)</b><span>Gateway, Langfuse, pgvector, Argo, eval gate</span></div></div>
+    <div class="item"><span class="swatch" style="background:var(--data-bg);border-color:var(--data-line)"></span><div><b>Datastores (unchanged)</b><span>Postgres system of record, Redis cache</span></div></div>
+    <div class="item"><span class="swatch" style="background:var(--ext-bg);border-color:var(--ext-line)"></span><div><b>External</b><span>Anthropic API — outside the VPC</span></div></div>
+    <div class="item"><span class="line-sw" style="border-top:2px solid var(--flow)"></span><div><b>Request path</b><span>The daily precompute flow</span></div></div>
+    <div class="item"><span class="line-sw" style="border-top:2px dashed var(--egress)"></span><div><b>Egress hop</b><span>The one pod-to-internet call — the gateway's</span></div></div>
+    <div class="item"><span class="line-sw" style="border-top:2px dashed var(--ai)"></span><div><b>Side link</b><span>Retrieval + trace, pod-to-pod</span></div></div>
+  </div>
+
+  <!-- notes -->
+  <div class="notes">
+    <div><b>Why the gateway is the centerpiece.</b> Routing every LLM call through one pod means the blast radius of both the Anthropic credential and the egress path is a <b>single workload</b> — the NetworkPolicy allows external <span class="mono">:443</span> from the gateway only, and IRSA scopes the Secret to the gateway's ServiceAccount alone.</div>
+    <div><b>Not drawn: GPU serving (Tier 3).</b> Self-hosted vLLM / KServe on a GPU node group is designed in ADR 0008 but stays document-only — the accent here is that the whole platform runs on ordinary CPU workloads at ~$0 locally.</div>
+    <div><b>Argo is an open fork (Tier 2).</b> Either it replaces only the daily <span class="mono">ingestion</span> scheduler — calc stays a RabbitMQ consumer — <b>or</b> it models the whole pipeline as a DAG and RabbitMQ drops its trigger role. Not both, and calc is never triggered on a timer. Defaulting toward the first.</div>
+    <div><b>Sequencing.</b> This lands <b>after</b> the Terraform infra track (network → cluster → app). Build order: gateway → Langfuse → eval gate → pgvector → Argo.</div>
+  </div>
+
+</div>

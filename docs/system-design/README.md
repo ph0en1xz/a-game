@@ -1,8 +1,9 @@
 # A-Game — System design diagrams
 
-Current as of **2026-07-16**, reflecting ADR 0002 (EKS for learning), ADR 0003 (API-only
-SaaS), ADR 0004 (Python stack), ADR 0005 (precompute architecture), and ADR 0007 (daily,
-change-gated ingestion). Open any `.svg` in a browser or VS Code.
+Current as of **2026-07-22**, reflecting ADR 0002 (EKS for learning), ADR 0003 (API-only
+SaaS), ADR 0004 (Python stack), ADR 0005 (precompute architecture), ADR 0007 (daily,
+change-gated ingestion), and ADR 0008 (AI platform layer). Open any `.svg` in a browser or
+VS Code; the `.html` diagrams open in a browser.
 
 ## Reading order
 
@@ -14,6 +15,7 @@ change-gated ingestion). Open any `.svg` in a browser or VS Code.
 | 4 | [`flow-3-phase2-websocket.svg`](flow-3-phase2-websocket.svg) | **Phase 2 only** (not built in v1): how push updates will reach the Next.js client via RabbitMQ |
 | 5 | [`k8s-deployment-view.svg`](k8s-deployment-view.svg) | How the pieces map to Kubernetes workloads: Deployments (api, calc), CronJob (ingestion), StatefulSets (RabbitMQ, Redis, Postgres) |
 | 6 | [`network-topology.html`](network-topology.html) | The AWS network layer: how a public ALB in the public subnets routes inbound traffic to api pods in the private subnets across two AZs, plus route tables and NAT egress |
+| 7 | [`ai-platform-topology.html`](ai-platform-topology.html) | **The AI platform layer** (ADR 0008): LiteLLM gateway as the one LLM egress hop, Langfuse tracing, pgvector RAG, and Argo (orchestration fork open — see the doc) as private-subnet workloads, plus a CI eval gate in GitHub Actions. See [`ai-platform.md`](ai-platform.md) for the full design |
 
 ## The design in three sentences
 
@@ -36,6 +38,7 @@ RabbitMQ is deliberately adopted as a learning target.
 
 ## Maintenance
 
-Diagrams 1–5 are hand-maintained SVG; `network-topology.html` is a self-contained HTML page
-(inline CSS, no external assets) — open any of them in a browser. Any ADR that changes the
-architecture must update the affected diagrams **in the same change**.
+Diagrams 1–5 are hand-maintained SVG; `network-topology.html` and `ai-platform-topology.html`
+are self-contained HTML pages (inline CSS, theme-aware, no external assets) — open any of them
+in a browser. Any ADR that changes the architecture must update the affected diagrams **in the
+same change**.

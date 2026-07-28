@@ -69,34 +69,42 @@ resource "aws_route_table_association" "public" {
 
 # 8. Route table for private subnets
 resource "aws_route_table" "private_route_table" {
-    vpc_id = aws_vpc.main.id
-    tags   = {
-        Name = "${var.project}-${var.environment}-private-rt" 
-    }
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "${var.project}-${var.environment}-private-rt"
+  }
 }
 
 # 9. Route table route for private subnets to nat gateway
 resource "aws_route" "private_nat_route" {
-    route_table_id         = aws_route_table.private_route_table.id
-    nat_gateway_id         = aws_nat_gateway.nat.id
-    destination_cidr_block = "0.0.0.0/0"
+  route_table_id         = aws_route_table.private_route_table.id
+  nat_gateway_id         = aws_nat_gateway.nat.id
+  destination_cidr_block = "0.0.0.0/0"
 }
 
 # 10. Route table association for private subnets
-resource "aws_route_table_association" "private" {
-    count = length(var.private_subnet_cidrs)
-    subnet_id = aws_subnet.private_subnets[count.index].id
-    route_table_id = aws_route_table.private_route_table.id
+resource "aws_route_table_association" "private_rt" {
+  count          = length(var.private_subnet_cidrs)
+  subnet_id      = aws_subnet.private_subnets[count.index].id
+  route_table_id = aws_route_table.private_route_table.id
 }
 
-# 11. Route table for private subnets
-# resource "aws_nat_gateway" "nt" {
-#     tags = {
-#         Name = "${varp.project}-${var.environment}-nat"
-#     }
-# }
+# 11. NAT gateway — outbound-only internet for the private subnets; lives in a
+# public subnet because its own traffic exits via the IGW. Single shared NAT (dev cost
+# trade-off); prod would run one per AZ.
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.eip.id
+  subnet_id     = aws_subnet.public_subnets[0].id
+  tags = {
+    Name = "${var.project}-${var.environment}-nat"
+  }
+  depends_on = [aws_internet_gateway.igw]
+}
 
-# # 12. 
-# resource "aws_eip" "eip" {
-
-# }
+# 12. Elastic IP address to be assigned to NAT gateway
+resource "aws_eip" "eip" {
+  domain = "vpc"
+  tags = {
+    Name = "${var.project}-${var.environment}-nat-eip"
+  }
+}
