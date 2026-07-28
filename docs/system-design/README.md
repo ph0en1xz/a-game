@@ -1,8 +1,9 @@
 # A-Game — System design diagrams
 
-Current as of **2026-07-22**, reflecting ADR 0002 (EKS for learning), ADR 0003 (API-only
+Current as of **2026-07-28**, reflecting ADR 0002 (EKS for learning), ADR 0003 (API-only
 SaaS), ADR 0004 (Python stack), ADR 0005 (precompute architecture), ADR 0007 (daily,
-change-gated ingestion), and ADR 0008 (AI platform layer). Open any `.svg` in a browser or
+change-gated ingestion), ADR 0008 (AI platform layer), and ADR 0009 (local validation split —
+EKS Terraform is plan-only, Kubernetes work runs on local k3s). Open any `.svg` in a browser or
 VS Code; the `.html` diagrams open in a browser.
 
 ## Reading order
@@ -13,7 +14,7 @@ VS Code; the `.html` diagrams open in a browser.
 | 2 | [`flow-1-precompute-pipeline.svg`](flow-1-precompute-pipeline.svg) | The daily pipeline that creates **all** data: ingest → RabbitMQ → calc → Claude → Postgres/Redis |
 | 3 | [`flow-2-api-request.svg`](flow-2-api-request.svg) | What happens on every API call: key auth → cache → Postgres. Plain reads, no computation, no pending states |
 | 4 | [`flow-3-phase2-websocket.svg`](flow-3-phase2-websocket.svg) | **Phase 2 only** (not built in v1): how push updates will reach the Next.js client via RabbitMQ |
-| 5 | [`k8s-deployment-view.svg`](k8s-deployment-view.svg) | How the pieces map to Kubernetes workloads: Deployments (api, calc), CronJob (ingestion), StatefulSets (RabbitMQ, Redis, Postgres) |
+| 5 | [`k8s-deployment-view.svg`](k8s-deployment-view.svg) | How the pieces map to Kubernetes workloads: Deployments (api, calc), CronJob (ingestion), StatefulSets (RabbitMQ, Redis, Postgres). Validated locally on **k3s**, not EKS (ADR 0009) |
 | 6 | [`network-topology.html`](network-topology.html) | The AWS network layer: how a public ALB in the public subnets routes inbound traffic to api pods in the private subnets across two AZs, plus route tables and NAT egress |
 | 7 | [`ai-platform-topology.html`](ai-platform-topology.html) | **The AI platform layer** (ADR 0008): LiteLLM gateway as the one LLM egress hop, Langfuse tracing, pgvector RAG, and Argo (orchestration fork open — see the doc) as private-subnet workloads, plus a CI eval gate in GitHub Actions. See [`ai-platform.md`](ai-platform.md) for the full design |
 
@@ -33,7 +34,7 @@ RabbitMQ is deliberately adopted as a learning target.
 - [`../api-spec.md`](../api-spec.md) — the public HTTP contract (v2)
 - [`../input-spec.md`](../input-spec.md) — engine inputs, the external endpoints used (§2–5), output contract (§8)
 - [`../schema.md`](../schema.md) — the Postgres schema (ingestion half: team, competition, season, match)
-- [`../adr/`](../adr/) — decision records 0001–0007
+- [`../adr/`](../adr/) — decision records 0001–0009
 - [`../../TECHSTACK.md`](../../TECHSTACK.md) — fast-load stack reference
 
 ## Maintenance
