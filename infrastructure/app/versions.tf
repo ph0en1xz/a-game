@@ -14,7 +14,7 @@ terraform {
   backend "s3" {
     bucket         = "a-game-tfstate"
     key            = "app/dev/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "eu-west-1"
     use_lockfile   = true
 
     access_key = "test"
