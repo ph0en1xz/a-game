@@ -1,24 +1,251 @@
+# =============================================================================
+# NetworkPolicies for the a-game namespace
+#
+# NetworkPolicy is default-ALLOW. A pod is wide open until some policy selects
+# it — the opposite of an AWS security group. So: one empty policy per direction
+# to close the namespace, then narrow policies to open specific paths.
+#
+# Policies only add. Several policies on one pod = the union of their allows.
+# There is no deny rule and no priority.
+#
+# Ingress: podSelector is the DESTINATION, `from` the sources.
+# Egress:  podSelector is the SOURCE,      `to`   the destinations.
+# So egress rules go on the client. Only api, brain and worker dial out;
+# postgres, redis and rabbitmq only receive.
+#
+# Every hop needs both sides: the client's egress AND the server's ingress.
+#
+# Selectors in the same list item are AND-ed; separate items are OR-ed. Each
+# item has its own `ports` — merge three destinations into one item and you
+# permit all nine combinations (api -> postgres:6379, and so on).
+#
+# ipBlock is for outside the cluster only. In-cluster, always use podSelector —
+# kube-proxy rewrites Service IPs to pod IPs before policy is checked, so pod
+# labels are what match. Never write rules against a 10.43.x.x Service IP.
+#
+# Debugging: kube-router REJECTs, so a blocked pod says "connection refused"
+# instantly rather than timing out. Refused usually means a missing rule, not a
+# dead server. Test from a long-lived pod — a one-shot `kubectl run ... curl`
+# races the policy controller and gives a false refusal:
+#   kubectl run tmp --image=curlimages/curl -n a-game --restart=Never --command -- sleep 3600
+#   sleep 10 && kubectl exec -n a-game tmp -- curl -sS a-game-api:80/health
+#
+# EKS WARNING: EKS does not enforce NetworkPolicy by default. Without the VPC
+# CNI policy agent (or Calico) everything here is accepted and ignored. The
+# CIDRs below are k3d/flannel; on EKS pods get real VPC IPs. See ADR 0009.
+# =============================================================================
+
+
+###### Egress ######
+
+# Close the namespace to all outbound traffic, except DNS.
+#
+# DNS needs an explicit hole because CoreDNS is just a pod in kube-system — name
+# lookups are ordinary pod-to-pod traffic and get blocked like anything else.
+# Miss this and every hostname fails, which looks exactly like the database
+# being down.
+#
+# But CoreDNS only hands back an IP; your traffic never flows through it. The
+# connection you then open is a separate decision, made by the policies below.
+# "Name resolved, connection refused" is the normal symptom of a missing rule:
+#   kubectl exec -n a-game tmp -- nslookup a-game-postgres            # resolves
+#   kubectl exec -n a-game tmp -- curl -sS -m 3 a-game-postgres:5432  # refused
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: a-game-network-egress-policy
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector: {}   # applies to all PODS in the namespace
+  policyTypes:
+    - Egress
+  egress:
+    # namespaceSelector because CoreDNS is in another namespace (a bare
+    # podSelector can only ever mean "in mine"). Both selectors sit in one list
+    # item, so they're AND-ed: the kube-dns pods IN kube-system. Split apart
+    # they'd be OR-ed and this would open all of kube-system.
+    # The label still says kube-dns — CoreDNS inherited it from the server it
+    # replaced. Port 53 needs UDP (normal) and TCP (retry when a response is
+    # too big for one UDP packet).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+---
+# api -> postgres, redis. It's a read-only facade (ADR 0005) and never leaves
+# the cluster, so no internet rule. Check it with /readyz, which touches both —
+# /health passes even with the network broken:
+#   kubectl port-forward -n a-game deploy/a-game-api 8000:8000
+#   curl -s localhost:8000/readyz
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-egress
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-api    # the source of the traffic
+  policyTypes:
+    - Egress
+  egress:
+    - to:                                   # one item per destination, so each
+        - podSelector:                      # port applies only to its own
+            matchLabels:
+              app.kubernetes.io/name: a-game-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+# brain -> postgres, redis, rabbitmq. Consumes queue jobs, recomputes
+# predictions, writes Postgres, warms Redis. All in-cluster — the
+# football-data.org call belongs to the worker, not here.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  namespace: a-game
+  name: allow-brain-egress
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-brain
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-rabbitmq
+      ports:
+        - protocol: TCP
+          port: 5672
+---
+# worker -> postgres, rabbitmq, football-data.org. The daily ingestion CronJob
+# (80-worker.yaml, 06:00 UTC) and the only thing here that leaves the cluster.
+#
+# Its pod only exists during a run, but it's still a normal pod with these
+# labels, so it inherits the namespace default-deny. Without these rules the
+# 06:00 run fails and nobody notices. Test it now instead of waiting:
+#   kubectl create job -n a-game worker-test --from=cronjob/a-game-worker
+#   kubectl logs -n a-game -l job-name=worker-test --follow
+#   kubectl delete job worker-test -n a-game
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-worker-egress
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-worker
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-rabbitmq
+      ports:
+        - protocol: TCP
+          port: 5672
+    # The one place ipBlock is right: football-data.org has no pod to select.
+    # `except` carves the cluster's own ranges back out, so this grants internet
+    # 443 and can't be turned into a path to a pod on 443.
+    # These are cluster-wide ranges set at cluster creation, not pod IPs — they
+    # survive restarts. Rediscover with:
+    #   kubectl get nodes -o jsonpath='{range .items[*]}{.spec.podCIDR}{"\n"}{end}'
+    #   kubectl create service clusterip probe --clusterip=1.1.1.1 --tcp=80  # read the error
+    - to: # Internet Rule needs to be added on worker since its accessing internet
+        - ipBlock: # For 3rd party calls (no pod selection)
+            cidr: 0.0.0.0/0 # Allows the entire internet
+            except:
+              - 10.42.0.0/16    # pod CIDR (flannel)
+              - 10.43.0.0/16    # Service CIDR
+      ports:
+        - protocol: TCP
+          port: 443
+---
+
+
+###### Ingress ######
+
+# Close the namespace to all inbound traffic. This is what makes the policies
+# below matter — without it api, brain and worker are selected by nothing and
+# accept connections from anywhere in the cluster.
+#
+# It doesn't tighten postgres. Postgres is selected by this AND by
+# allow-postgres, and policies only add, so an empty one subtracts nothing. Its
+# job is dragging the unselected pods into the firewalled set — and closing any
+# new pod on arrival.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: a-game-network-policy
   namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
 spec:
   podSelector: {}   # applies to all PODS in the namespace
   policyTypes:
     - Ingress
 ---
+# Who may reach postgres. It's the only system of record, so all three clients
+# need it: api reads, brain writes predictions, worker writes raw facts.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-postgres
   namespace: a-game
-  labels: 
+  labels:
     app.kubernetes.io/part-of: a-game
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: a-game-postgres
+      app.kubernetes.io/name: a-game-postgres   # the destination
   policyTypes:
     - Ingress
   ingress:
@@ -36,6 +263,8 @@ spec:
         - protocol: TCP
           port: 5432
 ---
+# Who may reach redis. A removable cache: api reads it, brain warms it. The
+# worker never touches it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -61,6 +290,11 @@ spec:
         - protocol: TCP
           port: 6379
 ---
+# Who may reach rabbitmq. Worker publishes, brain consumes (ADR 0007).
+#
+# There's deliberately no ingress policy for brain or worker: nothing ever
+# connects TO them, so the default-deny leaves them unreachable. That's correct,
+# not an omission.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -72,7 +306,7 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: a-game-rabbitmq
-  policyTypes:  
+  policyTypes:
     - Ingress
   ingress:
     - from:

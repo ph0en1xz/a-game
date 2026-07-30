@@ -1,0 +1,500 @@
+<title>IRSA — how a pod gets its own IAM role</title>
+<style>
+  :root {
+    --ground: #f6f7f9;
+    --panel: #ffffff;
+    --edge: #dde1e7;
+    --ink: #161b22;
+    --ink-soft: #5b6675;
+    --token: #b3741a;
+    --token-bg: #fdf4e6;
+    --trust: #216f6b;
+    --trust-bg: #e9f4f3;
+    --warn: #a33a2a;
+    --warn-bg: #fbeeeb;
+    --rail: #c3cad3;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0e1218;
+      --panel: #161c25;
+      --edge: #262f3b;
+      --ink: #e6eaf0;
+      --ink-soft: #939fae;
+      --token: #e0a94f;
+      --token-bg: #2a2114;
+      --trust: #5fb8b1;
+      --trust-bg: #12262a;
+      --warn: #e08573;
+      --warn-bg: #2b1a17;
+      --rail: #38414e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e1218;
+    --panel: #161c25;
+    --edge: #262f3b;
+    --ink: #e6eaf0;
+    --ink-soft: #939fae;
+    --token: #e0a94f;
+    --token-bg: #2a2114;
+    --trust: #5fb8b1;
+    --trust-bg: #12262a;
+    --warn: #e08573;
+    --warn-bg: #2b1a17;
+    --rail: #38414e;
+  }
+  :root[data-theme="light"] {
+    --ground: #f6f7f9;
+    --panel: #ffffff;
+    --edge: #dde1e7;
+    --ink: #161b22;
+    --ink-soft: #5b6675;
+    --token: #b3741a;
+    --token-bg: #fdf4e6;
+    --trust: #216f6b;
+    --trust-bg: #e9f4f3;
+    --warn: #a33a2a;
+    --warn-bg: #fbeeeb;
+    --rail: #c3cad3;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    margin: 0;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  .wrap { max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 2.25rem; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 0.5rem;
+  }
+  h1 {
+    font-size: clamp(1.6rem, 4vw, 2.2rem);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0 0 0.6rem;
+  }
+  .lede { color: var(--ink-soft); max-width: 60ch; margin: 0; }
+
+  h2 {
+    font-size: 0.78rem;
+    font-family: var(--mono);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--edge);
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    border-radius: 4px;
+    padding: 1rem 1.15rem;
+  }
+
+  /* ---- setup band ---- */
+  .setup { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+  .setup .card { border-left: 3px solid var(--trust); }
+  .setup h3 { font-size: 0.95rem; margin: 0 0 0.3rem; letter-spacing: -0.01em; }
+  .setup p { margin: 0; font-size: 0.87rem; color: var(--ink-soft); }
+
+  /* ---- sequence ---- */
+  .seq { display: flex; flex-direction: column; gap: 0; }
+  .step { display: grid; grid-template-columns: 3.25rem 1fr; column-gap: 1rem; }
+  .rail { position: relative; display: flex; justify-content: center; }
+  .rail::before {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--rail);
+  }
+  .step:first-child .rail::before { top: 1.15rem; }
+  .step:last-child .rail::before { bottom: auto; height: 1.15rem; }
+  .num {
+    position: relative;
+    z-index: 1;
+    margin-top: 0.45rem;
+    width: 1.6rem; height: 1.6rem;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--panel);
+    border: 2px solid var(--rail);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+  .step .body { padding: 0.3rem 0 1.6rem; min-width: 0; }
+  .actor {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 0.15rem;
+  }
+  .step h3 { font-size: 1rem; margin: 0 0 0.35rem; letter-spacing: -0.01em; }
+  .step p { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+  .step p + p { margin-top: 0.5rem; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--token-bg);
+    color: var(--token);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    word-break: break-word;
+  }
+  .step.is-trust .num { border-color: var(--trust); color: var(--trust); }
+  .step.is-token .num { border-color: var(--token); color: var(--token); }
+
+  .note {
+    background: var(--trust-bg);
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--trust);
+    border-radius: 4px;
+    padding: 0.9rem 1.1rem;
+    font-size: 0.9rem;
+  }
+  .note strong { color: var(--trust); }
+  .contrast {
+    background: var(--warn-bg);
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--warn);
+    border-radius: 4px;
+    padding: 0.9rem 1.1rem;
+    font-size: 0.9rem;
+  }
+  .contrast strong { color: var(--warn); }
+  .note p, .contrast p { margin: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .scroller { overflow-x: auto; }
+  th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--edge); vertical-align: top; }
+  th {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  td:first-child { font-family: var(--mono); font-size: 0.82rem; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+
+  footer { font-size: 0.82rem; color: var(--ink-soft); border-top: 1px solid var(--edge); padding-top: 1rem; }
+  footer p { margin: 0; }
+
+  /* ---- schematic ---- */
+  .diagram { background: var(--panel); border: 1px solid var(--edge); border-radius: 4px; padding: 0.5rem; }
+  .diagram svg { display: block; width: 100%; min-width: 44rem; height: auto; }
+  .boundary { fill: none; stroke: var(--rail); stroke-width: 1.5; stroke-dasharray: 6 5; }
+  .boundary-label { fill: var(--ink-soft); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .box { fill: var(--panel); stroke: var(--edge); stroke-width: 1.5; }
+  .box-title { fill: var(--ink); font-family: var(--sans); font-size: 14px; font-weight: 600; }
+  .box-sub { fill: var(--ink-soft); font-family: var(--mono); font-size: 11px; }
+  .flow { fill: none; stroke-width: 1.75; }
+  .flow-soft { stroke: var(--ink-soft); }
+  .flow-token { stroke: var(--token); }
+  .flow-trust { stroke: var(--trust); }
+  .flow-dot { stroke: var(--ink-soft); stroke-width: 1.5; stroke-dasharray: 4 4; fill: none; }
+  .badge { fill: var(--panel); stroke-width: 2; }
+  .badge-num { font-family: var(--mono); font-size: 11px; font-weight: 600; text-anchor: middle; }
+  .edge-label { fill: var(--ink-soft); font-family: var(--mono); font-size: 10.5px; text-anchor: middle; }
+  .legend { display: flex; flex-wrap: wrap; gap: 1.25rem; font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.9rem; }
+  .legend span { display: inline-flex; align-items: center; gap: 0.45rem; }
+  .swatch { width: 1.4rem; height: 0; border-top: 2px solid; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">A-Game · EKS cluster layer</p>
+    <h1>IRSA: how one pod gets its own IAM role</h1>
+    <p class="lede">Without this, every pod on a node shares the node role's permissions. IRSA
+      swaps a Kubernetes identity for an AWS identity, per pod, with no stored keys.</p>
+  </header>
+
+  <section>
+    <h2>The exchange, at a glance</h2>
+    <div class="diagram scroller">
+      <svg viewBox="0 0 940 500" role="img" aria-label="Diagram of the IRSA token exchange between an EKS pod, the cluster OIDC issuer, and AWS STS.">
+        <defs>
+          <marker id="ah-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-soft)" />
+          </marker>
+          <marker id="ah-token" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--token)" />
+          </marker>
+          <marker id="ah-trust" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--trust)" />
+          </marker>
+        </defs>
+
+        <!-- boundaries -->
+        <rect class="boundary" x="24" y="60" width="300" height="400" rx="6" />
+        <text class="boundary-label" x="40" y="82">EKS cluster</text>
+        <rect class="boundary" x="610" y="60" width="306" height="400" rx="6" />
+        <text class="boundary-label" x="626" y="82">AWS account</text>
+
+        <!-- cluster nodes -->
+        <rect class="box" x="48" y="112" width="252" height="56" rx="4" />
+        <text class="box-title" x="64" y="136">ServiceAccount</text>
+        <text class="box-sub" x="64" y="155">annotation: role-arn</text>
+
+        <rect class="box" x="48" y="222" width="252" height="100" rx="4" />
+        <text class="box-title" x="64" y="248">Pod — litellm-gateway</text>
+        <text class="box-sub" x="64" y="270">AWS_ROLE_ARN</text>
+        <text class="box-sub" x="64" y="288">AWS_WEB_IDENTITY_TOKEN_FILE</text>
+        <text class="box-sub" x="64" y="306">/…/serviceaccount/token</text>
+
+        <rect class="box" x="48" y="378" width="252" height="52" rx="4" />
+        <text class="box-title" x="64" y="401">Admission webhook</text>
+        <text class="box-sub" x="64" y="419">injects the signed token</text>
+
+        <!-- oidc issuer, public -->
+        <rect class="box" x="372" y="96" width="190" height="76" rx="4" />
+        <text class="box-title" x="388" y="122">OIDC issuer</text>
+        <text class="box-sub" x="388" y="141">public JWKS endpoint</text>
+        <text class="box-sub" x="388" y="159">signs pod tokens</text>
+
+        <!-- aws nodes -->
+        <rect class="box" x="634" y="204" width="258" height="64" rx="4" />
+        <text class="box-title" x="650" y="230">AWS STS</text>
+        <text class="box-sub" x="650" y="249">AssumeRoleWithWebIdentity</text>
+
+        <rect class="box" x="634" y="302" width="258" height="60" rx="4" />
+        <text class="box-title" x="650" y="326">IAM role</text>
+        <text class="box-sub" x="650" y="345">trust policy pins the SA</text>
+
+        <rect class="box" x="634" y="392" width="258" height="56" rx="4" />
+        <text class="box-title" x="650" y="416">Secrets Manager</text>
+        <text class="box-sub" x="650" y="434">anthropic api key</text>
+
+        <!-- 1: SA -> pod -->
+        <path class="flow flow-soft" d="M 174 168 L 174 216" marker-end="url(#ah-soft)" />
+        <circle class="badge" cx="196" cy="192" r="10" stroke="var(--ink-soft)" />
+        <text class="badge-num" x="196" y="196" fill="var(--ink-soft)">1</text>
+
+        <!-- 2: webhook -> pod -->
+        <path class="flow flow-token" d="M 174 378 L 174 328" marker-end="url(#ah-token)" />
+        <circle class="badge" cx="196" cy="352" r="10" stroke="var(--token)" />
+        <text class="badge-num" x="196" y="356" fill="var(--token)">2</text>
+
+        <!-- 3: pod -> sts -->
+        <path class="flow flow-token" d="M 300 244 L 628 222" marker-end="url(#ah-token)" />
+        <text class="edge-label" x="464" y="222">token → STS</text>
+        <circle class="badge" cx="464" cy="248" r="10" stroke="var(--token)" />
+        <text class="badge-num" x="464" y="252" fill="var(--token)">3</text>
+
+        <!-- 4: sts -> oidc issuer -->
+        <path class="flow flow-trust" d="M 763 204 L 763 134 L 568 134" marker-end="url(#ah-trust)" />
+        <text class="edge-label" x="668" y="126">verify signature</text>
+        <circle class="badge" cx="668" cy="152" r="10" stroke="var(--trust)" />
+        <text class="badge-num" x="668" y="156" fill="var(--trust)">4</text>
+
+        <!-- 5: sts -> pod -->
+        <path class="flow flow-trust" d="M 628 262 L 300 288" marker-end="url(#ah-trust)" />
+        <text class="edge-label" x="464" y="302">temporary credentials</text>
+        <circle class="badge" cx="464" cy="278" r="10" stroke="var(--trust)" />
+        <text class="badge-num" x="464" y="282" fill="var(--trust)">5</text>
+
+        <!-- sts checks iam role -->
+        <path class="flow-dot" d="M 763 268 L 763 302" />
+
+        <!-- 6: pod -> secrets manager -->
+        <path class="flow flow-soft" d="M 300 316 L 628 408" marker-end="url(#ah-soft)" />
+        <circle class="badge" cx="470" cy="364" r="10" stroke="var(--ink-soft)" />
+        <text class="badge-num" x="470" y="368" fill="var(--ink-soft)">6</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="border-color: var(--token)"></i>token travelling</span>
+      <span><i class="swatch" style="border-color: var(--trust)"></i>trust being verified</span>
+      <span><i class="swatch" style="border-color: var(--ink-soft)"></i>ordinary call</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Set up once, by Terraform</h2>
+    <div class="setup">
+      <div class="card">
+        <h3>The OIDC provider</h3>
+        <p>Your EKS cluster signs identity tokens from its own issuer URL.
+          <code>aws_iam_openid_connect_provider</code> registers that issuer in IAM, so AWS is
+          willing to believe tokens it signed.</p>
+      </div>
+      <div class="card">
+        <h3>The role's trust policy</h3>
+        <p>An IAM role allows <code>sts:AssumeRoleWithWebIdentity</code> from that provider —
+          conditioned on one exact <code>namespace:serviceaccount</code>. This is what stops any
+          other pod using the role.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What happens at runtime</h2>
+    <div class="seq">
+
+      <div class="step">
+        <div class="rail"><span class="num">1</span></div>
+        <div class="body">
+          <p class="actor">You → Kubernetes</p>
+          <h3>The ServiceAccount names a role</h3>
+          <p>You annotate the pod's ServiceAccount with
+            <code>eks.amazonaws.com/role-arn</code>. That annotation is the entire link between
+            the Kubernetes world and the AWS world.</p>
+        </div>
+      </div>
+
+      <div class="step is-token">
+        <div class="rail"><span class="num">2</span></div>
+        <div class="body">
+          <p class="actor">Admission webhook → Pod</p>
+          <h3>A signed token is projected into the pod</h3>
+          <p>As the pod is admitted, EKS mutates it: a short-lived JWT signed by the cluster's
+            OIDC issuer is mounted at a file path, and
+            <code>AWS_ROLE_ARN</code> plus <code>AWS_WEB_IDENTITY_TOKEN_FILE</code> are set as
+            environment variables.</p>
+          <p>The token's audience is <code>sts.amazonaws.com</code> and its subject is
+            <code>system:serviceaccount:&lt;namespace&gt;:&lt;name&gt;</code> — the claim the
+            trust policy checks.</p>
+        </div>
+      </div>
+
+      <div class="step is-token">
+        <div class="rail"><span class="num">3</span></div>
+        <div class="body">
+          <p class="actor">Pod → AWS STS</p>
+          <h3>The SDK trades the token for credentials</h3>
+          <p>The AWS SDK inside your container finds those two environment variables on its own
+            and calls <code>sts:AssumeRoleWithWebIdentity</code>, presenting the JWT. You write
+            no credential code.</p>
+        </div>
+      </div>
+
+      <div class="step is-trust">
+        <div class="rail"><span class="num">4</span></div>
+        <div class="body">
+          <p class="actor">AWS STS → OIDC issuer</p>
+          <h3>STS verifies the signature</h3>
+          <p>STS fetches the issuer's public keys over the internet and checks the JWT was
+            genuinely signed by your cluster, then checks the audience and that the subject
+            matches the role's trust condition.</p>
+        </div>
+      </div>
+
+      <div class="step is-trust">
+        <div class="rail"><span class="num">5</span></div>
+        <div class="body">
+          <p class="actor">AWS STS → Pod</p>
+          <h3>Temporary credentials come back</h3>
+          <p>Valid for about an hour, refreshed automatically by the SDK before they expire.
+            Nothing long-lived is ever stored in the cluster.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="rail"><span class="num">6</span></div>
+        <div class="body">
+          <p class="actor">Pod → AWS service</p>
+          <h3>The pod calls AWS as itself</h3>
+          <p>Secrets Manager, S3, whatever the role allows — and only that role, not the node's.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="contrast">
+    <p><strong>Why it matters here.</strong> The node role is attached to the EC2 instance, so
+      every pod scheduled on it inherits the same access. If one pod needs to read the Anthropic
+      API key, all of them can.</p>
+  </div>
+
+  <section>
+    <h2>What this buys A-Game</h2>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Pod</th><th>Its own role allows</th><th>Everything else</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>litellm-gateway</td>
+            <td>Read the Anthropic API key from Secrets Manager</td>
+            <td>Denied</td>
+          </tr>
+          <tr>
+            <td>calc</td>
+            <td>Nothing in AWS — it only talks to the gateway and RabbitMQ</td>
+            <td>Denied</td>
+          </tr>
+          <tr>
+            <td>api</td>
+            <td>Read its database credential</td>
+            <td>Denied</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Three certificates, easily confused</h2>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Which</th><th>Where it comes from</th><th>What it proves</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>cluster_ca_data</td>
+            <td>Private CA that EKS generates for the cluster</td>
+            <td>That <code>cluster_endpoint</code> really is your API server — the kubectl/Helm handshake</td>
+          </tr>
+          <tr>
+            <td>issuer TLS cert</td>
+            <td>A public CA (Amazon Trust Services)</td>
+            <td>That the OIDC issuer URL is genuine. Its root fingerprint is the
+              <code>thumbprint_list</code> the <code>tls_certificate</code> data source reads</td>
+          </tr>
+          <tr>
+            <td>signing keys (JWKS)</td>
+            <td>The cluster's OIDC issuer</td>
+            <td>That a pod's token was signed by your cluster — what STS checks at step 4</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="note">
+    <p><strong>The ADR 0008 claim.</strong> "Only the gateway holds the Anthropic credential" is
+      enforced by exactly two things: this IRSA trust condition on the IAM side, and the egress
+      NetworkPolicy on the Kubernetes side. Neither alone is sufficient.</p>
+  </div>
+
+  <footer>
+    <p>IRSA has no local equivalent — service-account annotations are inert on k3s and only take
+      effect against real EKS (ADR 0009).</p>
+  </footer>
+
+</div>

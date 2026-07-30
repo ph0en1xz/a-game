@@ -82,6 +82,17 @@ spec:
                 port:
                   number: 80
 ---
+# Who is allowed to reach the api. The namespace default-deny in
+# 50-networkpolicies.yaml closes every pod to inbound traffic, so without this
+# policy the api would be unreachable — including from Traefik, and the Ingress
+# above would silently stop working.
+#
+# The api is the only pod in a-game that accepts traffic from outside the
+# namespace. Everything else (postgres, redis, rabbitmq) is reached only by its
+# siblings; brain and worker are never connected to at all.
+#
+# Source is kube-system because that's where Traefik runs, and Traefik is what
+# forwards Ingress traffic to the Service. Narrow it to Traefik's own pod labels
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -91,6 +102,9 @@ metadata:
     app.kubernetes.io/part-of: a-game
     app.kubernetes.io/name: a-game-api
 spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-api
   policyTypes:
     - Ingress
   ingress:
@@ -98,12 +112,9 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
       ports:
         - protocol: TCP
           port: 8000
-              
-
-          
-     
-          
-      

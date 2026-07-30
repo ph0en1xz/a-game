@@ -17,6 +17,7 @@ VS Code; the `.html` diagrams open in a browser.
 | 5 | [`k8s-deployment-view.svg`](k8s-deployment-view.svg) | How the pieces map to Kubernetes workloads: Deployments (api, calc), CronJob (ingestion), StatefulSets (RabbitMQ, Redis, Postgres). Validated locally on **k3s**, not EKS (ADR 0009) |
 | 6 | [`network-topology.html`](network-topology.html) | The AWS network layer: how a public ALB in the public subnets routes inbound traffic to api pods in the private subnets across two AZs, plus route tables and NAT egress |
 | 7 | [`ai-platform-topology.html`](ai-platform-topology.html) | **The AI platform layer** (ADR 0008): LiteLLM gateway as the one LLM egress hop, Langfuse tracing, pgvector RAG, and Argo (orchestration fork open — see the doc) as private-subnet workloads, plus a CI eval gate in GitHub Actions. See [`ai-platform.md`](ai-platform.md) for the full design |
+| 8 | [`irsa-flow.html`](irsa-flow.html) | **IRSA** — how a pod trades a Kubernetes service account token for its own temporary IAM credentials: the OIDC issuer, the STS exchange, and why the node role isn't good enough. Also disambiguates the three certificates involved |
 
 ## The design in three sentences
 
@@ -39,7 +40,7 @@ RabbitMQ is deliberately adopted as a learning target.
 
 ## Maintenance
 
-Diagrams 1–5 are hand-maintained SVG; `network-topology.html` and `ai-platform-topology.html`
-are self-contained HTML pages (inline CSS, theme-aware, no external assets) — open any of them
+Diagrams 1–5 are hand-maintained SVG; `network-topology.html`, `ai-platform-topology.html`, and
+`irsa-flow.html` are self-contained HTML pages (inline CSS, theme-aware, no external assets) — open any of them
 in a browser. Any ADR that changes the architecture must update the affected diagrams **in the
 same change**.

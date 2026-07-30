@@ -30,7 +30,7 @@
 
 ## Database & cache
 - **PostgreSQL — the only system of record.** Raw facts (JSONB for payloads) **and predictions** (permanent, model-versioned → enables accuracy/calibration tracking). MongoDB dropped (ADR 0001).
-- **Redis — read-through cache ONLY** (no pub/sub). Removable without design change; kept partly as a stateful-workload learning artifact.
+- **Redis — read-through cache for the app** (no pub/sub). Was "removable without design change"; **no longer true once AI-platform Tier 1 lands** — Langfuse uses Redis as a *queue*, on a dedicated `REDIS_DB` index, so deleting Redis then breaks trace ingestion (ADR 0008 §Amendments, 2026-07-30). Still a deliberate stateful-workload learning artifact.
 
 ## Messaging
 - **RabbitMQ — single broker** for jobs and events. Adopted explicitly as a **learning target** (ADR 0005, on the ADR 0002 precedent) — not a structural requirement.
