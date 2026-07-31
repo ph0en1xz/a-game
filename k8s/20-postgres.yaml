@@ -35,6 +35,11 @@ spec:
         app.kubernetes.io/name: a-game-postgres
         app.kubernetes.io/part-of: a-game
     spec:
+      securityContext:                 # image's postgres user is uid 70 (alpine)
+        runAsNonRoot: true
+        runAsUser: 70
+        fsGroup: 70                    # makes the PVC writable by that uid
+        fsGroupChangePolicy: OnRootMismatch   # skip the recursive chown once it's right
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -58,6 +63,10 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits:   { cpu: 500m, memory: 512Mi }
+          securityContext:                    # starts as uid 70, so the entrypoint
+            allowPrivilegeEscalation: false   # skips its root chown/su-exec branch
+            capabilities:                     # and needs no capabilities at all
+              drop: ["ALL"]
   volumeClaimTemplates:       # gives the pod its own persistent disk
                               # mounts the volume to the pod at /var/lib/postgresql/data
     - metadata:
