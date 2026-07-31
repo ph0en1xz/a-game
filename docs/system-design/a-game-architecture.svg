@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="960" viewBox="0 0 680 960" role="img" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
 <title>A-Game layered architecture (v1 — ADR 0005)</title>
-<desc>Seven layers: client (Phase 2), edge, messaging, processing, shared, data, external. Precompute pipeline: the ingestion worker (CronJob daily at 06:00 UTC) fetches the sports data API, upserts facts to PostgreSQL, and publishes a data-ready job to RabbitMQ only if the upsert changed rows; the calculation service consumes it, computes predictions, calls the Claude API for narration, writes predictions to PostgreSQL and warms the Redis cache. The API service serves plain reads through the shared Redis and Postgres packages. Dashed lines are package dependencies, solid lines are runtime data flow. The Next.js browser client is Phase 2.</desc>
+<desc>Seven layers: client (Phase 2), edge, messaging, processing, shared, data, external. Precompute pipeline: the worker (CronJob daily at 06:00 UTC) fetches the sports data API, upserts facts to PostgreSQL, and publishes a data-ready job to RabbitMQ only if the upsert changed rows; the brain consumes it, computes predictions, calls the Claude API for narration, writes predictions to PostgreSQL and warms the Redis cache. The API service serves plain reads through the shared Redis and Postgres packages. Dashed lines are package dependencies, solid lines are runtime data flow. The Next.js browser client is Phase 2.</desc>
 <defs>
 <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
 <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -38,10 +38,10 @@
 <rect class="band" x="140" y="430" width="500" height="96" rx="12"/>
 <text class="bandlabel" x="156" y="450">Processing layer</text>
 <rect x="170" y="462" width="190" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-<text class="title" fill="#3C3489" x="265" y="482" text-anchor="middle" dominant-baseline="central">Calculation service</text>
+<text class="title" fill="#3C3489" x="265" y="482" text-anchor="middle" dominant-baseline="central">brain</text>
 <text class="sub" fill="#534AB7" x="265" y="500" text-anchor="middle" dominant-baseline="central">Precomputes and narrates</text>
 <rect x="400" y="462" width="190" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-<text class="title" fill="#3C3489" x="495" y="482" text-anchor="middle" dominant-baseline="central">Ingestion worker</text>
+<text class="title" fill="#3C3489" x="495" y="482" text-anchor="middle" dominant-baseline="central">worker</text>
 <text class="sub" fill="#534AB7" x="495" y="500" text-anchor="middle" dominant-baseline="central">CronJob daily · 06:00 UTC</text>
 
 <rect class="band" x="140" y="560" width="500" height="96" rx="12"/>

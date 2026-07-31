@@ -25,17 +25,17 @@ load-bearing for anyone but me.
 
 Three services, one pipeline:
 
-**ingestion** (`a-game-worker`) — a CronJob that runs daily at 06:00 UTC. It fetches from
+**worker** (`a-game-worker`) — a CronJob that runs daily at 06:00 UTC. It fetches from
 football-data, upserts the facts into Postgres, and publishes a "data ready" job *only if the upsert
 actually changed a row*. A run that changes nothing publishes nothing and exits. That constraint is
 the whole design ([ADR 0007](docs/adr/0007-ingestion-cadence-daily-change-gated.md)): fixtures move
 in weekend and midweek clusters, so most runs have nothing to say, and firing the AI pipeline on
 byte-identical inputs is just spending money to recompute yesterday.
 
-**calc** (`a-game-brain`) — consumes that job, recomputes ratings and probabilities for upcoming
+**brain** (`a-game-brain`) — consumes that job, recomputes ratings and probabilities for upcoming
 fixtures, has Claude narrate them, writes the results back to Postgres and warms Redis.
 
-**api** (`a-game-api`) — four read-only `GET` endpoints that serve what calc already computed.
+**api** (`a-game-api`) — four read-only `GET` endpoints that serve what the brain already computed.
 Nothing is calculated on request; there are no pending states and nothing to poll. Contract in
 [`docs/api-spec.md`](docs/api-spec.md).
 
@@ -55,7 +55,7 @@ The full breakdown, including what's decided and what isn't, is in
 
 ## Status
 
-Early. The cluster runs, the schema is settled, and ingestion fetches competitions and seasons into
+Early. The cluster runs, the schema is settled, and the worker fetches competitions and seasons into
 Postgres on a schedule. What isn't done:
 
 - Match ingestion — the change gate and the fixture upsert
@@ -113,7 +113,7 @@ kubectl logs -n a-game job/worker-manual-1 -f
 ```
 a-game-api/        FastAPI read API
 a-game-brain/      prediction engine + Claude narration
-a-game-worker/     ingestion CronJob, plus the schema DDL in postgres/
+a-game-worker/     the worker CronJob, plus the schema DDL in postgres/
 k8s/               manifests, applied in numeric order
 infrastructure/    Terraform, layered: network → cluster → app
 docs/adr/          why things are the way they are

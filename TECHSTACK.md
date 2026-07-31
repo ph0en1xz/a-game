@@ -17,16 +17,16 @@
 ## Runtime & language
 - **Python 3.12+** (ADR 0004 — supersedes ADR 0001's Node/TS).
 - **API service:** FastAPI + **pydantic** (validation at every external boundary — HTTP, football-data payloads, Claude responses).
-- **Workers:** plain Python (calculation/AI, ingestion), sharing the same pydantic models.
+- **Workers:** plain Python (brain, worker), sharing the same pydantic models.
 - **Tooling:** `ruff` (lint + format) · `mypy` · `pytest` · **`uv`** for deps/envs.
 - Core logic (data client, Elo/Poisson engine, AI layer) stays **portable, framework-agnostic modules** — no FastAPI imports in the core.
 
 ## Services (v1 architecture — ADR 0005)
 - **api** — FastAPI REST; plain reads of precomputed predictions. WebSockets deferred to Phase 2.
-- **ingestion** — k8s CronJob daily at 06:00 UTC (ADR 0007): fetch football-data.org → clean/transform → **upsert** facts to Postgres → publish "data ready" job **only if the upsert changed rows**. A no-change run publishes nothing and exits 0.
-- **calc** — consumes the job; recomputes predictions + Claude (Haiku) narration for **all** upcoming fixtures; writes Postgres; warms Redis.
+- **worker** — k8s CronJob daily at 06:00 UTC (ADR 0007): fetch football-data.org → clean/transform → **upsert** facts to Postgres → publish "data ready" job **only if the upsert changed rows**. A no-change run publishes nothing and exits 0.
+- **brain** — consumes the job; recomputes predictions + Claude (Haiku) narration for **all** upcoming fixtures; writes Postgres; warms Redis.
 - **Precompute model:** no compute-on-request, no pending/polling states (ADR 0005).
-- **ServiceAccounts** (`k8s/10-serviceaccounts.yaml`) — one per service, the IRSA anchor for prod. Names predate this vocabulary, so the mapping is: **api → `a-game-api-sa`**, **calc → `a-game-brain-sa`**, **ingestion → `a-game-worker-sa`**. Token automount is disabled on all three (none call the k8s API).
+- **ServiceAccounts** (`k8s/10-serviceaccounts.yaml`) — one per service, the IRSA anchor for prod: `a-game-api-sa`, `a-game-brain-sa`, `a-game-worker-sa`. Token automount is disabled on all three (none call the k8s API). *Naming note (2026-07-30): docs and diagrams previously called these services api/calc/ingestion while the pods were named api/brain/worker. Everything now uses **api · brain · worker** — the pod names — so no mapping is needed. "Ingestion" and "calculation" still appear where they mean the **activity**, not the service.*
 
 ## Database & cache
 - **PostgreSQL — the only system of record.** Raw facts (JSONB for payloads) **and predictions** (permanent, model-versioned → enables accuracy/calibration tracking). MongoDB dropped (ADR 0001).
@@ -44,7 +44,7 @@
 
 ## Orchestration & packaging
 - **Docker** — multi-stage, non-root.
-- **Kubernetes — the compute model end to end:** **k3s** (via k3d) locally, **EKS** as the prod target. Deliberate: the priority is hands-on Kubernetes experience. Workloads: Deployments (api, calc), CronJob (ingestion), StatefulSets (RabbitMQ, Redis, Postgres).
+- **Kubernetes — the compute model end to end:** **k3s** (via k3d) locally, **EKS** as the prod target. Deliberate: the priority is hands-on Kubernetes experience. Workloads: Deployments (api, brain), CronJob (worker), StatefulSets (RabbitMQ, Redis, Postgres).
 
 ## CI/CD (ADR 0006, 2026-07-10)
 - **GitHub Actions** — CI (ruff · mypy · pytest · Docker build) once app code exists; `terraform plan` / gated `apply` via **OIDC** (no static AWS keys).

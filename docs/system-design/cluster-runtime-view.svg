@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="946" viewBox="0 0 1280 946" role="img" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
 <title>A-Game — Kubernetes cluster runtime view (v1)</title>
-<desc>Every in-cluster object for A-Game and the allowed traffic between them, inside the a-game namespace. The request path runs consumer to Ingress controller to the api ClusterIP Service to the api Deployment. The api, calc and ingestion workloads reach three data stores (PostgreSQL, Redis, RabbitMQ) through headless Services; each store is a StatefulSet with a PVC. calc calls the Claude API and ingestion calls football-data.org as egress. A side panel holds the ConfigMap, Secrets and per-workload ServiceAccounts, with a prod-only note covering External Secrets, IRSA and the cluster OIDC provider. NetworkPolicy is default-deny and every arrow is one explicitly allowed edge. Runs on k3s locally and targets EKS in production per ADR 0002; matches ADR 0005.</desc>
+<desc>Every in-cluster object for A-Game and the allowed traffic between them, inside the a-game namespace. The request path runs consumer to Ingress controller to the api ClusterIP Service to the api Deployment. The api, brain and worker workloads reach three data stores (PostgreSQL, Redis, RabbitMQ) through headless Services; each store is a StatefulSet with a PVC. brain calls the Claude API and worker calls football-data.org as egress. A side panel holds the Secrets and per-workload ServiceAccounts, with a prod-only note covering External Secrets, IRSA and the cluster OIDC provider. As verified on 2026-07-30 the only Secrets that exist are db-credentials, rabbitmq-credentials and sports-api-credentials; the app-config ConfigMap is planned but not built, Redis has no auth secret, and the api Deployment consumes no secrets at all. NetworkPolicy is default-deny in both directions as of 2026-07-30 and every arrow is one explicitly allowed edge. Runs on k3s locally; EKS remains the prod target per ADR 0002, with its Terraform kept plan-only per ADR 0009. Matches ADR 0005.</desc>
 <defs>
 <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
 <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -42,21 +42,21 @@
 <text x="980" y="202" font-size="12" font-weight="600" fill="#274257">Config, identity &amp; secrets</text>
 
 <rect x="980" y="222" width="260" height="70" rx="8" fill="#EAF1F6" stroke="#5B7E9C" stroke-width="0.6"/>
-<text class="h" fill="#274257" x="992" y="242">ConfigMap: app-config</text>
+<text class="h" fill="#274257" x="992" y="242">ConfigMap: app-config — PLANNED, not built</text>
 <text class="t" fill="#3E6180" x="992" y="259">league IDs · schedule · model version · base URLs</text>
-<text class="t" fill="#3E6180" x="992" y="275">mounted by api · calc · ingestion</text>
+<text class="t" fill="#3E6180" x="992" y="275">no ConfigMap exists yet; config is inline env</text>
 
 <rect x="980" y="304" width="260" height="128" rx="8" fill="#EAF1F6" stroke="#5B7E9C" stroke-width="0.6"/>
-<text class="h" fill="#274257" x="992" y="324">Secrets (Kubernetes)</text>
-<text class="t" fill="#3E6180" x="992" y="343">db-credentials  (api · calc · ingestion)</text>
-<text class="t" fill="#3E6180" x="992" y="360">redis-auth  (api · calc)</text>
-<text class="t" fill="#3E6180" x="992" y="377">rabbitmq-auth  (calc · ingestion)</text>
-<text class="t" fill="#3E6180" x="992" y="394">claude-api-key  (calc)</text>
-<text class="t" fill="#3E6180" x="992" y="411">football-data-token  (ingestion)</text>
+<text class="h" fill="#274257" x="992" y="324">Secrets (Kubernetes) — actual, verified 2026-07-30</text>
+<text class="t" fill="#3E6180" x="992" y="343">db-credentials  (postgres · brain · worker)</text>
+<text class="t" fill="#3E6180" x="992" y="360">rabbitmq-credentials  (rabbitmq · brain · worker)</text>
+<text class="t" fill="#3E6180" x="992" y="377">sports-api-credentials  (worker)</text>
+<text class="t" fill="#3E6180" x="992" y="394">Redis has no auth secret — none configured</text>
+<text class="t" fill="#3E6180" x="992" y="411">api consumes NO secrets (no envFrom at all)</text>
 
 <rect x="980" y="444" width="260" height="72" rx="8" fill="#EAF1F6" stroke="#5B7E9C" stroke-width="0.6"/>
 <text class="h" fill="#274257" x="992" y="464">ServiceAccounts</text>
-<text class="t" fill="#3E6180" x="992" y="482">api-sa · calc-sa · ingestion-sa</text>
+<text class="t" fill="#3E6180" x="992" y="482">a-game-api-sa · a-game-brain-sa · a-game-worker-sa</text>
 <text class="t" fill="#3E6180" x="992" y="499">one identity per workload → least privilege</text>
 
 <rect x="980" y="528" width="260" height="180" rx="8" fill="#EFEDE7" stroke="#9A9890" stroke-width="0.6" stroke-dasharray="4 3"/>
@@ -84,25 +84,25 @@
 <rect x="64" y="428" width="236" height="120" rx="8" fill="#EEEDFE" stroke="#6A5FD6" stroke-width="0.7"/>
 <text class="h" fill="#3C3489" x="76" y="450">api — Deployment</text>
 <text class="s" fill="#534AB7" x="76" y="470">FastAPI · plain reads, no compute</text>
-<text class="s" fill="#534AB7" x="76" y="488">SA: api-sa</text>
-<text class="s" fill="#534AB7" x="76" y="506">cfg: app-config</text>
-<text class="s" fill="#534AB7" x="76" y="524">secrets: db · redis</text>
+<text class="s" fill="#534AB7" x="76" y="488">SA: a-game-api-sa</text>
+<text class="s" fill="#534AB7" x="76" y="506">cfg: none (image defaults)</text>
+<text class="s" fill="#534AB7" x="76" y="524">secrets: none — no envFrom</text>
 <text class="t" fill="#8A83C8" x="76" y="541">reached by Ingress → serves consumers</text>
 
 <rect x="374" y="428" width="236" height="120" rx="8" fill="#EEEDFE" stroke="#6A5FD6" stroke-width="0.7"/>
-<text class="h" fill="#3C3489" x="386" y="450">calc — Deployment</text>
+<text class="h" fill="#3C3489" x="386" y="450">brain — Deployment</text>
 <text class="s" fill="#534AB7" x="386" y="470">RabbitMQ consumer · Elo/Poisson + Haiku</text>
-<text class="s" fill="#534AB7" x="386" y="488">SA: calc-sa</text>
-<text class="s" fill="#534AB7" x="386" y="506">cfg: app-config</text>
-<text class="s" fill="#534AB7" x="386" y="524">secrets: db · redis · mq · claude</text>
+<text class="s" fill="#534AB7" x="386" y="488">SA: a-game-brain-sa</text>
+<text class="s" fill="#534AB7" x="386" y="506">cfg: inline env (no ConfigMap)</text>
+<text class="s" fill="#534AB7" x="386" y="524">secrets: db · rabbitmq  (no Claude key yet)</text>
 <text class="t" fill="#8A83C8" x="386" y="541">no Service — nothing calls it, it pulls</text>
 
 <rect x="684" y="428" width="236" height="120" rx="8" fill="#EEEDFE" stroke="#6A5FD6" stroke-width="0.7"/>
-<text class="h" fill="#3C3489" x="696" y="450">ingestion — CronJob</text>
+<text class="h" fill="#3C3489" x="696" y="450">worker — CronJob</text>
 <text class="s" fill="#534AB7" x="696" y="470">schedule 0 6 * * * · pull → upsert → publish if changed</text>
-<text class="s" fill="#534AB7" x="696" y="488">SA: ingestion-sa</text>
-<text class="s" fill="#534AB7" x="696" y="506">cfg: app-config</text>
-<text class="s" fill="#534AB7" x="696" y="524">secrets: db · mq · football-data</text>
+<text class="s" fill="#534AB7" x="696" y="488">SA: a-game-worker-sa</text>
+<text class="s" fill="#534AB7" x="696" y="506">cfg: inline env (no ConfigMap)</text>
+<text class="s" fill="#534AB7" x="696" y="524">secrets: db · rabbitmq · sports-api</text>
 <text class="t" fill="#8A83C8" x="696" y="541">no Service — outbound only</text>
 
 <!-- ============ HEADLESS SERVICES ROW ============ -->
@@ -130,7 +130,7 @@
 <rect x="374" y="684" width="236" height="128" rx="8" fill="#E1F5EE" stroke="#2E8B72" stroke-width="0.7"/>
 <text class="h" fill="#085041" x="386" y="706">Redis — StatefulSet</text>
 <text class="s" fill="#0F6E56" x="386" y="726">read-through cache only</text>
-<text class="s" fill="#0F6E56" x="386" y="744">removable without design change</text>
+<text class="s" fill="#0F6E56" x="386" y="744">not removable once Langfuse lands (ADR 0008)</text>
 <rect x="386" y="756" width="150" height="20" rx="5" fill="#CDEBE0" stroke="#2E8B72" stroke-width="0.5"/>
 <text class="t" fill="#085041" x="461" y="770" text-anchor="middle">PVC · volumeClaimTemplate</text>
 <text class="t" fill="#0F6E56" x="386" y="795">warmed by the pipeline, not authoritative</text>
@@ -167,9 +167,9 @@
 <path class="arr" d="M378 544 C 320 566, 288 572, 250 594" marker-end="url(#arrow)"/>
 <path class="arr" d="M606 544 C 664 566, 700 572, 742 594" marker-end="url(#arrow)"/>
 <line class="arr" x1="802" y1="548" x2="802" y2="594" marker-end="url(#arrow)"/>
-<!-- ingestion -> postgres-svc (long, routed through the clear channel at y=574) -->
+<!-- worker -> postgres-svc (long, routed through the clear channel at y=574) -->
 <path class="arr" d="M700 548 L 700 574 L 208 574 L 208 594" marker-end="url(#arrow)"/>
-<text class="elbl" x="470" y="569">ingestion → postgres</text>
+<text class="elbl" x="470" y="569">worker → postgres</text>
 
 <!-- egress arrows (orange) -->
 <path class="egr" d="M560 428 C 640 320, 720 210, 812 150" marker-end="url(#arrow)"/>

@@ -14,7 +14,7 @@ Football statistics and predictions app built on the football-data.org API: Elo 
 ## What this is
 - **Data source:** football-data.org free tier (matches, standings, scorers, teams, persons). Odds and shot-level xG are paid and out of v1 scope; injuries are v2.
 - **Engine:** Elo + Poisson, computed deterministically in code. The AI layer only phrases numbers — it never invents stats.
-- **Architecture (ADR 0005 — precompute, do not reopen):** ingestion CronJob (6h) → Postgres upsert → RabbitMQ "data ready" job → calc service recomputes ALL upcoming fixtures + Haiku narration → Postgres (permanent, model-versioned — calibration tracking) → warm Redis. The API does plain reads; no compute-on-request, no pending/polling states.
+- **Architecture (ADR 0005 — precompute, do not reopen):** worker CronJob (daily 06:00 UTC, ADR 0007) → Postgres upsert → RabbitMQ "data ready" job → brain recomputes ALL upcoming fixtures + Haiku narration → Postgres (permanent, model-versioned — calibration tracking) → warm Redis. The API does plain reads; no compute-on-request, no pending/polling states.
 - **Roles:** Postgres = only system of record · Redis = read-through cache, removable · RabbitMQ = single broker, adopted as a learning target.
 
 ## Environment
@@ -47,4 +47,4 @@ The secret-consumption rule in Non-negotiables is what makes step 2 additive rat
 - `k8s/` — hand-written learning manifests for the local k3d cluster (numbered: namespace, serviceaccounts, Postgres, Redis, RabbitMQ).
 - `a-game-api/` — throwaway FastAPI hello-world experiment; **not** the real scaffold.
 - `localstack/init/ready.d/` — LocalStack init hooks (recreates the tfstate bucket; community LocalStack is ephemeral).
-- App scaffold (Python/FastAPI: api + calc + ingestion services, shared pydantic models, `uv` layout) — **not started yet** (Track B: infra-first). DB schema design comes first, shaped by the calibration requirement.
+- App scaffold (Python/FastAPI: api + brain + worker services, shared pydantic models, `uv` layout) — **not started yet** (Track B: infra-first). DB schema design comes first, shaped by the calibration requirement.

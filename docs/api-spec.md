@@ -23,7 +23,7 @@ A JSON HTTP API. Four endpoints, all read-only `GET`, all authenticated:
 
 All responses are `application/json`, safe/idempotent, and cacheable.
 
-**No pending states.** Predictions are **precomputed** by the ingestion→calculation pipeline
+**No pending states.** Predictions are **precomputed** by the worker→brain pipeline
 (daily, and only when upstream data actually changed — ADR 0005, cadence amended by ADR
 0007). Every request is an immediate read; there is no `REQUEST_PENDING`, no polling, no
 "come back later."

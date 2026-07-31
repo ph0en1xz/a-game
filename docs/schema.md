@@ -1,6 +1,6 @@
 # A-Game — Database Schema (v1)
 
-> The Postgres schema the ingestion worker writes and the engine reads. Designed against
+> The Postgres schema the worker writes and the engine reads. Designed against
 > `docs/input-spec.md` §2 (core inputs), ADR 0005 (Postgres = system of record), and ADR 0007
 > (change-gated publish).
 

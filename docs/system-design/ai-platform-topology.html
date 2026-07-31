@@ -148,6 +148,15 @@
   .side .s { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: 2px; }
   .side.sub { border-style: dashed; opacity: 0.9; }
 
+  /* a Python module living INSIDE a pod — deliberately drawn nested, never as a peer node,
+     so it can't be misread as its own workload */
+  .node .module {
+    margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--ai-line);
+  }
+  .node .module .mk { font-weight: 650; font-size: 12px; color: var(--ai); }
+  .node .module .ms { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .node .module .ms b { color: var(--ink); font-weight: 650; }
+
   /* single egress hop leaving the cluster */
   .egress-row { display: flex; justify-content: center; margin: 0; }
   .egress {
@@ -232,7 +241,7 @@
   <header>
     <p class="eyebrow">A-Game · AI platform layer · ADR 0008</p>
     <h1>The platform around the models — gateway, tracing, evals, orchestration</h1>
-    <p class="lede">The daily pipeline already predicts (Elo + Poisson) and narrates (Claude Haiku). This layer wraps that LLM call in the operational surface an AI platform needs: one controlled egress hop, per-request cost/latency tracing, retrieval grounding, and DAG orchestration — all as ordinary private-subnet workloads. The numbers being predicted don't change.</p>
+    <p class="lede">The daily pipeline is <b>designed</b> to predict (Elo + Poisson) and narrate (Claude Haiku) — as of 2026-07-30 neither is built yet; <code>handlers.py</code> is a stub. This layer wraps the LLM call in the operational surface an AI platform needs: one controlled egress hop, per-request cost/latency tracing, retrieval grounding, and DAG orchestration — all as ordinary private-subnet workloads. The numbers being predicted don't change.</p>
   </header>
 
   <div class="stage">
@@ -240,9 +249,9 @@
     <!-- daily scheduler (NOT a per-service timer) -->
     <div class="chip orch">
       <div class="k">Daily scheduler · 06:00 UTC</div>
-      <div class="s">CronJob today → Argo Workflows (Tier 2) · runs ingestion, not calc</div>
+      <div class="s">CronJob today → Argo Workflows (Tier 2) · runs the worker, not brain</div>
     </div>
-    <div class="conn h30"><span class="tag">runs ingestion</span></div>
+    <div class="conn h30"><span class="tag">runs the worker</span></div>
 
     <!-- the cluster / private subnets -->
     <div class="cluster">
@@ -254,27 +263,28 @@
       <div class="spine">
 
         <div class="node">
-          <div class="k">ingest</div>
-          <div class="s">upsert · change-gated (ADR 0007)</div>
+          <div class="k">worker</div>
+          <div class="s">CronJob · upsert · change-gated (ADR 0007)</div>
         </div>
         <div class="conn h22"><span class="tag">publishes "data ready" on change</span></div>
         <div class="node">
           <div class="k">RabbitMQ</div>
           <div class="s">event bus · decouples the trigger</div>
         </div>
-        <div class="conn h22"><span class="tag">calc consumes &amp; reacts</span></div>
-        <div class="node">
-          <div class="k">calc / predict</div>
-          <div class="s">Elo + Poisson · long-running consumer · unchanged</div>
-        </div>
-        <div class="conn h22"></div>
-
-        <!-- commentary with pgvector side branch -->
+        <div class="conn h22"><span class="tag">brain consumes &amp; reacts</span></div>
+        <!-- brain pod, with commentary.py nested inside it and the pgvector side branch.
+             commentary.py is a MODULE in this pod, not a workload — it was previously drawn
+             as a peer node in this spine, which read as a fifth service. It never was one. -->
         <div class="withside">
           <div class="core">
             <div class="node">
-              <div class="k">commentary.py</div>
-              <div class="s">builds the preview prompt</div>
+              <div class="k">brain / predict</div>
+              <div class="s">Elo + Poisson · long-running consumer · unchanged</div>
+              <div class="module">
+                <div class="mk">commentary.py<span class="tierpill t1">T1</span></div>
+                <div class="ms"><b>module in this pod — not a service</b></div>
+                <div class="ms">builds the preview prompt · no new Deployment</div>
+              </div>
             </div>
           </div>
           <div class="branch">
@@ -304,6 +314,11 @@
               <div class="k">Langfuse<span class="tierpill t1">T1</span></div>
               <div class="s">tokens · cost · latency</div>
               <div class="s">prompt · response</div>
+              <div class="s">— v3 needs 6 parts —</div>
+              <div class="s">web + worker pods</div>
+              <div class="s">+ ClickHouse + MinIO</div>
+              <div class="s">reuses app Postgres</div>
+              <div class="s">+ Redis (option C)</div>
             </div>
           </div>
         </div>
@@ -345,8 +360,8 @@
   <div class="walk">
     <h2>One preview, end to end</h2>
     <ol class="steps">
-      <li><span class="n">1</span><span class="t">The <b>daily scheduler</b> (06:00 UTC — CronJob today, Argo in Tier 2) runs <b>ingestion</b>. If the upsert changed anything (ADR 0007) it publishes a <b>"data ready"</b> event; the <b>calc</b> consumer reacts off RabbitMQ and recomputes Elo + Poisson. Calc is never run on a timer.</span></li>
-      <li><span class="n">2</span><span class="t"><b>commentary.py</b> builds the prompt — and (Tier 2) pulls similar historical matches from <code>pgvector</code> to ground it.</span></li>
+      <li><span class="n">1</span><span class="t">The <b>daily scheduler</b> (06:00 UTC — CronJob today, Argo in Tier 2) runs the <b>worker</b>. If the upsert changed anything (ADR 0007) it publishes a <b>"data ready"</b> event; the <b>brain</b> consumer reacts off RabbitMQ and recomputes Elo + Poisson. Brain is never run on a timer.</span></li>
+      <li><span class="n">2</span><span class="t"><b>commentary.py</b> — a module <i>inside the brain pod</i>, not a service of its own — builds the prompt, and (Tier 2) pulls similar historical matches from <code>pgvector</code> to ground it.</span></li>
       <li><span class="n">3</span><span class="t">It calls the <b>LiteLLM gateway</b> at its cluster-internal Service address — not Anthropic directly. The gateway checks the budget, tries the cache, and holds the only credential.</span></li>
       <li><span class="n">4</span><span class="t">On a cache miss the gateway makes <b>the one egress call</b> to <code>api.anthropic.com:443</code> — the single pod-to-internet hop the NetworkPolicy has to allow.</span></li>
       <li><span class="n">5</span><span class="t">The gateway <b>emits a trace to Langfuse</b> — tokens, cost, latency, prompt, response, model version — then returns the preview.</span></li>
@@ -363,14 +378,16 @@
     <div class="item"><span class="line-sw" style="border-top:2px solid var(--flow)"></span><div><b>Request path</b><span>The daily precompute flow</span></div></div>
     <div class="item"><span class="line-sw" style="border-top:2px dashed var(--egress)"></span><div><b>Egress hop</b><span>The one pod-to-internet call — the gateway's</span></div></div>
     <div class="item"><span class="line-sw" style="border-top:2px dashed var(--ai)"></span><div><b>Side link</b><span>Retrieval + trace, pod-to-pod</span></div></div>
+    <div class="item"><span class="line-sw" style="border-top:1px dashed var(--ai-line)"></span><div><b>Module, not a workload</b><span>Nested inside a pod — no Deployment of its own</span></div></div>
   </div>
 
   <!-- notes -->
   <div class="notes">
     <div><b>Why the gateway is the centerpiece.</b> Routing every LLM call through one pod means the blast radius of both the Anthropic credential and the egress path is a <b>single workload</b> — the NetworkPolicy allows external <span class="mono">:443</span> from the gateway only, and IRSA scopes the Secret to the gateway's ServiceAccount alone.</div>
     <div><b>Not drawn: GPU serving (Tier 3).</b> Self-hosted vLLM / KServe on a GPU node group is designed in ADR 0008 but stays document-only — the accent here is that the whole platform runs on ordinary CPU workloads at ~$0 locally.</div>
-    <div><b>Argo is an open fork (Tier 2).</b> Either it replaces only the daily <span class="mono">ingestion</span> scheduler — calc stays a RabbitMQ consumer — <b>or</b> it models the whole pipeline as a DAG and RabbitMQ drops its trigger role. Not both, and calc is never triggered on a timer. Defaulting toward the first.</div>
-    <div><b>Sequencing.</b> This lands <b>after</b> the Terraform infra track (network → cluster → app). Build order: gateway → Langfuse → eval gate → pgvector → Argo.</div>
+    <div><b>Argo is an open fork (Tier 2).</b> Either it replaces only the daily <span class="mono">worker</span> scheduler — brain stays a RabbitMQ consumer — <b>or</b> it models the whole pipeline as a DAG and RabbitMQ drops its trigger role. Not both, and brain is never triggered on a timer. Defaulting toward the first.</div>
+    <div><b>Sequencing (revised 2026-07-30).</b> This layer now lands <b>first</b>, ahead of the EKS-portability and app-correctness tracks — ADR 0009 made the EKS cluster layer plan-only, so waiting on the infra track would mean waiting forever. Tier 1 depends on no applied AWS resource. Build order within the tier is unchanged: gateway → Langfuse → eval gate → pgvector → Argo.</div>
+    <div><b>No new Python services.</b> Tier 1 adds five workloads (LiteLLM, langfuse-web, langfuse-worker, ClickHouse, MinIO) and every one is an off-the-shelf image. The only Python written is <span class="mono">commentary.py</span> plus edits to <span class="mono">handlers.py</span> / <span class="mono">config.py</span>, all inside the existing brain service, and the eval fixtures in CI.</div>
   </div>
 
 </div>

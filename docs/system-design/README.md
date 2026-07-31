@@ -1,6 +1,6 @@
 # A-Game — System design diagrams
 
-Current as of **2026-07-28**, reflecting ADR 0002 (EKS for learning), ADR 0003 (API-only
+Current as of **2026-07-30**, reflecting ADR 0002 (EKS for learning), ADR 0003 (API-only
 SaaS), ADR 0004 (Python stack), ADR 0005 (precompute architecture), ADR 0007 (daily,
 change-gated ingestion), ADR 0008 (AI platform layer), and ADR 0009 (local validation split —
 EKS Terraform is plan-only, Kubernetes work runs on local k3s). Open any `.svg` in a browser or
@@ -11,24 +11,26 @@ VS Code; the `.html` diagrams open in a browser.
 | # | File | What it shows |
 |---|---|---|
 | 1 | [`a-game-architecture.svg`](a-game-architecture.svg) | The static layered view — every component and what depends on what |
-| 2 | [`flow-1-precompute-pipeline.svg`](flow-1-precompute-pipeline.svg) | The daily pipeline that creates **all** data: ingest → RabbitMQ → calc → Claude → Postgres/Redis |
+| 2 | [`flow-1-precompute-pipeline.svg`](flow-1-precompute-pipeline.svg) | The daily pipeline that creates **all** data: worker → RabbitMQ → brain → Claude → Postgres/Redis |
 | 3 | [`flow-2-api-request.svg`](flow-2-api-request.svg) | What happens on every API call: key auth → cache → Postgres. Plain reads, no computation, no pending states |
 | 4 | [`flow-3-phase2-websocket.svg`](flow-3-phase2-websocket.svg) | **Phase 2 only** (not built in v1): how push updates will reach the Next.js client via RabbitMQ |
-| 5 | [`k8s-deployment-view.svg`](k8s-deployment-view.svg) | How the pieces map to Kubernetes workloads: Deployments (api, calc), CronJob (ingestion), StatefulSets (RabbitMQ, Redis, Postgres). Validated locally on **k3s**, not EKS (ADR 0009) |
+| 5 | [`k8s-deployment-view.svg`](k8s-deployment-view.svg) | How the pieces map to Kubernetes workloads: Deployments (api, brain), CronJob (worker), StatefulSets (RabbitMQ, Redis, Postgres). Validated locally on **k3s**, not EKS (ADR 0009) |
 | 6 | [`network-topology.html`](network-topology.html) | The AWS network layer: how a public ALB in the public subnets routes inbound traffic to api pods in the private subnets across two AZs, plus route tables and NAT egress |
 | 7 | [`ai-platform-topology.html`](ai-platform-topology.html) | **The AI platform layer** (ADR 0008): LiteLLM gateway as the one LLM egress hop, Langfuse tracing, pgvector RAG, and Argo (orchestration fork open — see the doc) as private-subnet workloads, plus a CI eval gate in GitHub Actions. See [`ai-platform.md`](ai-platform.md) for the full design |
 | 8 | [`irsa-flow.html`](irsa-flow.html) | **IRSA** — how a pod trades a Kubernetes service account token for its own temporary IAM credentials: the OIDC issuer, the STS exchange, and why the node role isn't good enough. Also disambiguates the three certificates involved |
 
 ## The design in three sentences
 
-The ingestion CronJob pulls football-data.org daily at 06:00 UTC and upserts raw facts into
+The worker CronJob pulls football-data.org daily at 06:00 UTC and upserts raw facts into
 Postgres; **if that upsert changed anything** (ADR 0007) a RabbitMQ job then triggers the
-calc service to recompute Elo + Poisson
+brain to recompute Elo + Poisson
 predictions and Claude-written previews for **all** upcoming fixtures, storing them
 permanently (model-versioned) in Postgres and warming Redis. The FastAPI service serves four
 authenticated `GET` endpoints as plain reads of that precomputed data — it never computes
-anything per request. Postgres is the only system of record; Redis is a removable cache;
-RabbitMQ is deliberately adopted as a learning target.
+anything per request. Postgres is the only system of record; Redis is the app's cache — it
+*was* removable without design change, but stops being so once AI-platform Tier 1 lands, since
+Langfuse uses it as a queue (ADR 0008 §Amendments, 2026-07-30); RabbitMQ is deliberately
+adopted as a learning target.
 
 ## Related documents
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="920" height="660" viewBox="0 0 920 660" role="img" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
 <title>A-Game — Kubernetes deployment view (v1)</title>
-<desc>How the v1 services map to Kubernetes workloads inside the a-game namespace: api and calc are Deployments, ingestion is a CronJob, RabbitMQ, Redis and PostgreSQL are StatefulSets with persistent volumes. An Ingress is the only public entry. Claude API and football-data.org are external egress-only dependencies; the API consumer reaches the cluster over HTTPS with an API key. Runs on k3s locally and targets EKS in production per ADR 0002.</desc>
+<desc>How the v1 services map to Kubernetes workloads inside the a-game namespace: api and brain are Deployments, worker is a CronJob, RabbitMQ, Redis and PostgreSQL are StatefulSets with persistent volumes. An Ingress is the only public entry. Claude API and football-data.org are external egress-only dependencies; the API consumer reaches the cluster over HTTPS with an API key. Runs on k3s locally and targets EKS in production per ADR 0002.</desc>
 <defs>
 <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
 <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -30,12 +30,12 @@
 <text class="sub" fill="#534AB7" x="150" y="286" text-anchor="middle" dominant-baseline="central">reads Redis + Postgres</text>
 
 <rect x="260" y="230" width="190" height="74" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-<text class="title" fill="#3C3489" x="355" y="250" text-anchor="middle" dominant-baseline="central">calc — Deployment</text>
+<text class="title" fill="#3C3489" x="355" y="250" text-anchor="middle" dominant-baseline="central">brain — Deployment</text>
 <text class="sub" fill="#534AB7" x="355" y="270" text-anchor="middle" dominant-baseline="central">consumes RabbitMQ · writes</text>
 <text class="sub" fill="#534AB7" x="355" y="286" text-anchor="middle" dominant-baseline="central">Postgres/Redis · calls Claude</text>
 
 <rect x="470" y="230" width="190" height="74" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-<text class="title" fill="#3C3489" x="565" y="250" text-anchor="middle" dominant-baseline="central">ingestion — CronJob</text>
+<text class="title" fill="#3C3489" x="565" y="250" text-anchor="middle" dominant-baseline="central">worker — CronJob</text>
 <text class="sub" fill="#534AB7" x="565" y="270" text-anchor="middle" dominant-baseline="central">daily 06:00 UTC · calls football-data</text>
 <text class="sub" fill="#534AB7" x="565" y="286" text-anchor="middle" dominant-baseline="central">writes Postgres · publishes job</text>
 
@@ -46,8 +46,8 @@
 
 <rect x="260" y="380" width="190" height="74" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
 <text class="title" fill="#085041" x="355" y="400" text-anchor="middle" dominant-baseline="central">Redis — StatefulSet</text>
-<text class="sub" fill="#0F6E56" x="355" y="420" text-anchor="middle" dominant-baseline="central">PVC · cache only</text>
-<text class="sub" fill="#0F6E56" x="355" y="436" text-anchor="middle" dominant-baseline="central">(removable by design)</text>
+<text class="sub" fill="#0F6E56" x="355" y="420" text-anchor="middle" dominant-baseline="central">PVC · app cache only (no pub/sub)</text>
+<text class="sub" fill="#0F6E56" x="355" y="436" text-anchor="middle" dominant-baseline="central">no longer removable once Langfuse lands</text>
 
 <rect x="470" y="380" width="190" height="74" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
 <text class="title" fill="#085041" x="565" y="400" text-anchor="middle" dominant-baseline="central">PostgreSQL — StatefulSet</text>
@@ -55,7 +55,7 @@
 <text class="sub" fill="#0F6E56" x="565" y="436" text-anchor="middle" dominant-baseline="central">prod host TBD (RDS vs external)</text>
 
 <text class="note" x="60" y="500">· Internal traffic via cluster DNS (postgres:5432 · rabbitmq:5672 · redis:6379)</text>
-<text class="note" x="60" y="519">· NetworkPolicies: stores accept only their consumers; nothing but the Ingress is public</text>
+<text class="note" x="60" y="519">· NetworkPolicies (applied 2026-07-30): default-deny BOTH directions; worker holds the only 0.0.0.0/0:443 egress rule</text>
 <text class="note" x="60" y="538">· Secrets: k8s Secrets locally · External Secrets → AWS Secrets Manager in cloud</text>
 <text class="note" x="60" y="557">· Images: multi-stage, non-root · same manifests carry from k3s to EKS</text>
 
