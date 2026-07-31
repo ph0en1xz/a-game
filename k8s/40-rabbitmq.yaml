@@ -69,6 +69,10 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits:   { cpu: 500m, memory: 512Mi }   # rabbit sizes its memory watermark from this
+          securityContext:                    # already runs as uid 999, so it
+            allowPrivilegeEscalation: false   # needs no capabilities at all
+            capabilities:
+              drop: ["ALL"]
   volumeClaimTemplates:
     - metadata:
         name: data                     # must match the volumeMounts name

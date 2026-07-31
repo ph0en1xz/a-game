@@ -39,6 +39,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 999
         fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: redis
           image: redis:7-alpine
@@ -56,6 +57,10 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits:   { cpu: 500m, memory: 512Mi }
+          securityContext:                    # already runs as uid 999, so it
+            allowPrivilegeEscalation: false   # needs no capabilities at all
+            capabilities:
+              drop: ["ALL"]
   volumeClaimTemplates:
     - metadata:
         name: data
