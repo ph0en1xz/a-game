@@ -1,6 +1,6 @@
 # A-Game — AI platform layer
 
-Current as of **2026-07-30**. Design reference for the AI-infra scope expansion decided in
+Current as of **2026-08-04**. Design reference for the AI-infra scope expansion decided in
 **ADR 0008**. This describes the platform *around* the models — not the models themselves
 (Elo/Poisson lives in the engine; the LLM prompt lives in `docs/prompts/`).
 
@@ -13,12 +13,18 @@ Tier 1 first, then Tier 2; Tier 3 stays a design.
 > current state that was never built. Corrected throughout on that date to match ADR 0008's
 > three amendments. The two claims that were most wrong: the LLM call did not exist (and still
 > doesn't — `handlers.py` is a stub), and Langfuse v3 needs six components, not one Postgres.
+>
+> **Update, 2026-08-04.** The gateway now carries **two** providers with a fallback chain
+> (ADR 0008 §Amendments, 2026-08-04). Sections below reflect that decision; the manifest change
+> is **specified, not applied**, so nothing here should be read as observed behaviour. The
+> gateway image bump lands first, as its own step.
 
 ## Why this layer exists
 
-A-Game is *designed* to use AI — the brain service will call Claude Haiku to write previews.
-As of 2026-07-30 that call **does not exist yet**: there is no `commentary.py`, and
-`anthropic` is declared in `pyproject.toml` but never imported. AI-infra is the operational
+A-Game is *designed* to use AI — the brain service will ask the gateway for a preview, and the
+gateway routes that to Claude Haiku (falling back to OpenAI). As of 2026-08-04 that call
+**does not exist yet**: there is no `commentary.py`, and `anthropic` is declared in
+`pyproject.toml` but never imported. AI-infra is the operational
 platform that makes running LLM workloads observable, controllable, evaluable, and
 orchestrated. This layer adds that platform *and* the first real call that exercises it,
 without changing what gets predicted.
@@ -27,7 +33,7 @@ without changing what gets predicted.
 
 | Tier | Component | Runs as | Cost | Job |
 |---|---|---|---|---|
-| 1 | **LiteLLM gateway** | Deployment + Service | ~free | One controlled hop for every LLM call: rate limits, budget caps, caching, retries, fallback. Sole holder of the Anthropic credential; sole egress to `api.anthropic.com`. |
+| 1 | **LiteLLM gateway** | Deployment + Service | ~free | One controlled hop for every LLM call: rate limits, budget caps, caching, retries, fallback. Two routes — `claude-haiku` (Anthropic) primary, `gpt-4o-mini` (OpenAI) as its configured fallback. Sole holder of **both** provider credentials; the only workload with external egress besides the worker. |
 | 1 | **Langfuse** | 4 new workloads (`langfuse-web`, `langfuse-worker`, ClickHouse, MinIO) + a database and a Redis index on the app's existing stores | ~free | Per-request tracing: tokens, cost, latency, prompt, response, model version. **v3 is six components, not one** — see ADR 0008 §Amendments (option C). |
 | 1 | **Eval harness** | GitHub Actions job | free | Structured-output validation + factuality vs. real stats + regression on a fixed fixture set; blocks merge on regression. |
 | 2 | **pgvector RAG** | `vector` extension on existing Postgres | free | Retrieve similar historical matches to ground each preview. No new datastore. |
@@ -53,8 +59,10 @@ scheduler (daily 06:00 UTC — CronJob today; Argo Tier 2)
                         (in Postgres)               └─────────────┬───────────────┘
                                                                  │ calls cluster-internal
                                                                  ▼
-                                                        LiteLLM gateway ──► api.anthropic.com:443
-                                                                │  emits trace  (only egress hop)
+                                                        LiteLLM gateway
+                                                                │       └──► api.anthropic.com:443  (claude-haiku, primary)
+                                                                │       └──► api.openai.com:443     (gpt-4o-mini, fallback)
+                                                                │  emits trace  (only egress hop for LLM traffic)
                                                                 ▼
                                               langfuse-web + langfuse-worker
                                                                 │
@@ -74,10 +82,12 @@ timed-per-service. A daily tick runs the worker; the worker publishes a "data re
 consumer that reacts. **Nothing runs brain "every N hours."** Argo (Tier 2) changes only *how
 the run is orchestrated* — see the fork below — never how often brain computes.
 
-Key change vs. ADR 0005: `commentary.py` never calls Anthropic directly. It calls the
-**gateway's cluster-internal Service address**. The gateway holds the credential and owns the
-outbound call. (ADR 0005 assumed a direct SDK call; because the module is being written for the
-first time now, this is how it ships rather than something to migrate.)
+Key change vs. ADR 0005: `commentary.py` never calls a provider directly. It calls the
+**gateway's cluster-internal Service address** and asks for the model alias `claude-haiku`. The
+gateway holds the credentials, picks the provider, and owns the outbound call — including the
+fallback to `gpt-4o-mini` if the primary route fails, which the brain never sees. (ADR 0005
+assumed a direct SDK call; because the module is being written for the first time now, this is
+how it ships rather than something to migrate.)
 
 ## Orchestration: the Argo fork (Tier 2 — decide when we get there)
 
@@ -106,10 +116,16 @@ a timer.
   then allows external `:443` from the gateway pod only, plus kube-dns `:53` cluster-wide.
   Everything else talks pod-to-pod on cluster-internal Services. Today the worker
   holds the only `0.0.0.0/0:443` rule (football-data.org); the gateway becomes the second and
-  last one.
-- **Credentials via IRSA.** The Anthropic key lives in a Secret consumed only by the gateway;
-  the gateway's ServiceAccount is the only one scoped to read it. No other workload can.
-  (Locally this is a hand-created Secret — IRSA is the EKS half of the story.)
+  last one. **That rule is `0.0.0.0/0`, not provider-scoped** — both model providers sit behind
+  CDNs with rotating address ranges, so an `ipBlock` naming them is not maintainable. Adding a
+  second provider therefore requires no NetworkPolicy change at all, which is the honest reading
+  of "collapses to one path": one *pod* is the enforced boundary, one *destination* is not.
+- **Credentials via IRSA.** Both provider keys — `anthropic-credentials` and
+  `openai-credentials` — live in Secrets consumed only by the gateway; the gateway's
+  ServiceAccount is the only one scoped to read them. No other workload can. (Locally these are
+  hand-created Secrets — IRSA is the EKS half of the story.) The blast radius is still a single
+  pod, but that pod now holds two providers' keys rather than one; see ADR 0008 §Amendments
+  (2026-08-04) for why a gateway-per-provider was rejected.
 - **Langfuse and its datastores** are cluster-internal only (ClusterIP), reachable by the
   gateway for trace writes and by the operator (via port-forward) for the UI — never exposed.
 
@@ -120,16 +136,20 @@ scope reads straight off the topology.
 ## Cost posture
 
 - **Tier 1 + 2:** ordinary CPU cluster workloads — $0 on LocalStack / local k3s, negligible on
-  a running EKS beyond what the cluster already costs. LiteLLM caching *reduces* Anthropic
-  spend.
+  a running EKS beyond what the cluster already costs. LiteLLM caching *reduces* provider spend.
+- **Two providers, two bills (2026-08-04).** Budget caps are per route, so the cap set on the
+  Haiku route does not bound the fallback. A primary outage that trips the fallback shifts spend
+  to OpenAI silently unless `gpt-4o-mini` carries its own cap — set both, not one.
 - **Tier 3:** GPU node group is the only materially expensive piece — kept document-only and
   proven briefly, never standing.
 
 ## Build order
 
-1. **LiteLLM gateway** — create the Anthropic Secret, deploy the gateway, then write
+1. **LiteLLM gateway** — create the provider Secrets, deploy the gateway, then write
    `commentary.py` pointed at it. (Do this first; it also tightens the egress story for the
-   NetworkPolicy work.)
+   NetworkPolicy work.) As of 2026-08-04 this is a four-step sequence, each verified before the
+   next: **bump the image** → **confirm the Haiku route still answers** → **add the OpenAI route**
+   → **add `fallbacks` and prove the switch fires**. See ADR 0008 §Amendments (2026-08-04).
 2. **Langfuse** — deploy + wire the gateway's tracing.
 3. **Eval harness** — add the CI job + fixture set.
 4. **pgvector RAG** — enable extension, add retrieval to `commentary.py`.
@@ -200,8 +220,10 @@ Concrete, current-state → target, in build order:
 
 | # | Area | Change from today |
 |---|---|---|
-| 1 | k8s | **Add** LiteLLM gateway Deployment + ClusterIP Service + Secret + ServiceAccount (IRSA-scoped to the Anthropic Secret) |
-| 2 | Secret | **Create** the Anthropic key as a Secret attached to the gateway only (nothing holds it today — the call was never built) |
+| 1 | k8s | **Add** LiteLLM gateway Deployment + ClusterIP Service + Secrets + ServiceAccount (IRSA-scoped to the provider Secrets) |
+| 2 | Secret | **Create** the Anthropic key as a Secret attached to the gateway only (nothing holds it today — the call was never built), and `openai-credentials` alongside it for the fallback route. Both arrive via `envFrom` on the gateway Deployment; `envFrom` takes a list, so the second is an added entry, not a replacement |
+| 2b | k8s | **Bump** `ghcr.io/berriai/litellm` off `main-v1.61.1` — a year-old image holding every model credential in the project. Taken as its own step *before* the second route, so config-schema drift and a new `model_list` entry are not debugged together |
+| 2c | k8s | **Add** the `gpt-4o-mini` route to the same `litellm-config` ConfigMap (one more `model_list` entry, not a second ConfigMap) plus `litellm_settings.fallbacks` mapping `claude-haiku → [gpt-4o-mini]`. LiteLLM parses `config.yaml` at startup, so editing the ConfigMap alone is a no-op — a `rollout restart` is required |
 | 3 | Python | **`commentary.py` (new file, in the brain pod — not a new service):** `openai` client pointed at the gateway Service; `LITELLM_BASE_URL` + virtual key in brain's env, never `ANTHROPIC_API_KEY`. Swap `anthropic` → `openai` in `pyproject.toml` |
 | 4 | Python | **`commentary.py`:** return pydantic-validated JSON (structured output), not free text |
 | 5 | k8s | **Add** `langfuse-web` + `langfuse-worker` Deployments, ClickHouse + MinIO StatefulSets (all ClusterIP); give Langfuse a dedicated database on the app Postgres and a dedicated `REDIS_DB` index (option C); wire the gateway to emit traces to it |

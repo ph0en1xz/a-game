@@ -74,8 +74,10 @@ looks exactly like the database being down.
 Every other rule names both ends: the client's egress *and* the server's ingress. Selectors are pod
 labels, never Service IPs, because kube-proxy rewrites the Service IP to a pod IP before policy is
 evaluated — and policy is evaluated against the endpoint, so a rule written against a Service port
-silently matches nothing. The one `ipBlock` rule is for football-data.org, which has no pod to
-select.
+silently matches nothing. The two `ipBlock` rules are the ones with no pod to select: the worker
+reaching football-data.org, and the gateway reaching the model providers. The second is
+`0.0.0.0/0:443` rather than named ranges, because the providers sit behind CDNs that rotate
+addresses — so the enforced boundary there is *which pod may egress*, not where it may go.
 
 Rules are verified by connection, not by a clean `kubectl apply`. A valid policy with the wrong port
 number applies without complaint and fails at runtime with no log line anywhere.
@@ -102,11 +104,19 @@ a single parameter path.
 ### AI platform
 
 Model calls don't go straight to the provider. They go through a LiteLLM gateway
-([ADR 0008](docs/adr/0008-ai-platform-layer.md)) that owns the API key, so the credential exists in
-exactly one Secret mounted into exactly one pod and the application services hold none. It also
-gives one place to set retries, timeouts, per-model routing and spend limits without redeploying
-anything downstream — model access treated as infrastructure with a bill attached, rather than as a
-library import.
+([ADR 0008](docs/adr/0008-ai-platform-layer.md)) that owns the API keys, so credentials exist in
+Secrets mounted into exactly one pod and the application services hold none. It also gives one
+place to set retries, timeouts, per-model routing and spend limits without redeploying anything
+downstream — model access treated as infrastructure with a bill attached, rather than as a library
+import.
+
+Two providers sit behind it: Claude Haiku as the primary route, OpenAI as its configured fallback.
+A single model behind a gateway is just a proxy — the routing and failover are the part worth
+building, and a fallback nobody has watched fire is indistinguishable from one that doesn't work.
+The application asks for a model alias and never learns which provider answered.
+
+That does mean one pod now holds two providers' keys. The blast radius is still a single pod, and
+a gateway per provider would double the workload count to narrow it no further.
 
 Tracing (Langfuse) and eval gating in CI are the next pieces and aren't built yet.
 

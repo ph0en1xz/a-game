@@ -1,6 +1,6 @@
 # ADR 0008 — AI platform layer: gateway, observability, evals, RAG, orchestration
 
-- **Status:** Accepted — **amended 2026-07-30** (see §Amendments)
+- **Status:** Accepted — **amended 2026-07-30, 2026-08-04** (see §Amendments)
 - **Date:** 2026-07-22
 - **Amends:** ADR 0005 — its precompute pipeline stands, but the calc service no longer calls
   the Anthropic API directly (§Decision 1 below); the Claude call now goes through an
@@ -212,3 +212,59 @@ real — same treatment every other workload already gets.
 overlays in step 2. Avoid introducing new hardcoded k3d-specific values; where one is unavoidable,
 comment it so step 2 can find it. The two CIDRs in `k8s/50-networkpolicies.yaml` are already
 flagged this way and are the model to follow.
+
+### 2026-08-04 — second provider behind the gateway, with a fallback chain
+
+**Decision recorded, not yet running.** The manifest change is specified below and has not been
+applied; nothing in this amendment describes observed behaviour. Treat the previous amendment's
+correction as a standing rule: this section is a decision, and the build order below is what
+proves it.
+
+Tier 1 as written puts exactly one model behind the gateway. That makes the gateway a proxy.
+Its Decision text already claims "rate limiting, budget caps, response caching, retries, and
+**model fallback**" — but a single-model `model_list` cannot exercise the last of those, so the
+capability the tier exists to demonstrate would ship unproven.
+
+**Add a second provider — OpenAI `gpt-4o-mini` — and configure Claude Haiku to fall back to it.**
+Both routes live in the same `litellm-config` ConfigMap; `litellm_settings.fallbacks` maps
+`claude-haiku → [gpt-4o-mini]`. The brain calls `claude-haiku` and is unaware a second provider
+exists — which is the point: provider substitution becomes a gateway config change rather than an
+application change.
+
+`gpt-4o-mini` specifically, over a newer and cheaper small model: LiteLLM ships a model-cost map
+baked into each release, so a model the pinned image predates may still pass through to the
+provider while silently producing no spend or token accounting. That failure is invisible and
+defeats the reason the gateway exists. The constraint is the image version, not the model.
+
+**What this costs, stated plainly:**
+
+1. **The single-credential claim weakens.** Tier 1's Consequences say "exactly one workload needs
+   egress to Anthropic and exactly one holds the credential." One workload still holds them, but
+   it now holds **two** provider credentials, so a gateway-pod compromise exposes both. This is
+   accepted: the alternative — a second gateway per provider — doubles the workload count to
+   narrow a blast radius that is already one pod.
+2. **The egress claim was already looser than the prose.** `allow-litellm-egress` in
+   `k8s/50-networkpolicies.yaml` is `0.0.0.0/0:443`, not an Anthropic-specific rule, because both
+   providers sit behind CDNs with rotating address ranges. So adding OpenAI changes **nothing** at
+   the NetworkPolicy layer — which is worth saying out loud, because "sole egress to
+   `api.anthropic.com`" reads as an enforced constraint and is in fact a description of intent.
+   Narrowing that rule to real CIDRs is not currently practical; it stays a documented exception.
+3. **Two providers, two bills.** The budget-cap argument in Tier 1's Consequences now applies per
+   route, not once.
+
+**Also decided: bump the gateway image.** `ghcr.io/berriai/litellm:main-v1.61.1` is roughly a year
+old on a container that holds every model credential in the project. The bump is taken as its own
+step ahead of the provider change, because ~34 minor versions of config-schema drift and a new
+`model_list` entry are two independent failure causes and should not be debugged together.
+
+**Build order for this amendment** — each step verified before the next:
+
+1. Bump the image alone; confirm the existing `claude-haiku` route still answers.
+2. Add the `openai-credentials` Secret and the `gpt-4o-mini` route; call it directly.
+3. Add `fallbacks`; **prove it fires** by pointing the Haiku route at a bogus model id and
+   confirming a `gpt-4o-mini` response rather than an error. A fallback that has never been
+   observed to fire is indistinguishable from a fallback that does not work — the same failure
+   mode already documented for NetworkPolicy in this repo's README.
+
+Note for step 3: `num_retries: 2` is already set, so a failing primary retries twice *before* the
+fallback engages. The switch therefore presents as latency, not as an immediate failover.
