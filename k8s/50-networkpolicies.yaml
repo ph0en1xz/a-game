@@ -154,6 +154,13 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-litellm
+      ports:
+        - protocol: TCP
+          port: 4000
 ---
 # worker -> postgres, rabbitmq, football-data.org. The daily ingestion CronJob
 # (80-worker.yaml, 06:00 UTC) and the only thing here that leaves the cluster.
@@ -192,19 +199,9 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
-    # The one place ipBlock is right: football-data.org has no pod to select.
-    # `except` carves the cluster's own ranges back out, so this grants internet
-    # 443 and can't be turned into a path to a pod on 443.
-    # These are cluster-wide ranges set at cluster creation, not pod IPs — they
-    # survive restarts. Rediscover with:
-    #   kubectl get nodes -o jsonpath='{range .items[*]}{.spec.podCIDR}{"\n"}{end}'
-    #   kubectl create service clusterip probe --clusterip=1.1.1.1 --tcp=80  # read the error
     - to: # Internet Rule needs to be added on worker since its accessing internet
         - ipBlock: # For 3rd party calls (no pod selection)
             cidr: 0.0.0.0/0 # Allows the entire internet
-            except:
-              - 10.42.0.0/16    # pod CIDR (flannel)
-              - 10.43.0.0/16    # Service CIDR
       ports:
         - protocol: TCP
           port: 443
@@ -319,3 +316,48 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-litellm-egress
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+    app.kubernetes.io/name: a-game-litellm
+spec:
+  policyTypes:
+    - Egress
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-litellm
+  egress:
+    - to: #reach anthropic API
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-litellm
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+    app.kubernetes.io/name: a-game-litellm
+spec:
+  policyTypes:
+    - Ingress
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-litellm
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-brain
+      ports:
+        - protocol: TCP
+          port: 4000
