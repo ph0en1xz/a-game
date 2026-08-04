@@ -19,6 +19,8 @@ async def make_pg_pool() -> asyncpg.Pool:
             if retry_count == 0:
                 raise ConnectionError(f"Failed to connect to PostgreSQL after multiple attempts: {e}") from e
             await asyncio.sleep(5)  # Wait before retrying
+    if pool is None:
+        raise ConnectionError("Failed to connect to PostgreSQL: retries exhausted")
     return pool
 
 
@@ -37,4 +39,6 @@ async def make_redis() -> redis.Redis:
             if retry_count == 0:
                 raise ConnectionError(f"Failed to connect to Redis after multiple attempts: {e}") from e
             await asyncio.sleep(5)  # Wait before retrying
+    if redis_client is None:
+        raise ConnectionError("Failed to connect to Redis: retries exhausted")
     return redis_client

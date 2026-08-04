@@ -1,8 +1,8 @@
-import datetime
-import httpx
 import asyncio
-
+import datetime
 import logging
+
+import httpx
 
 from app.config import settings
 from app.model import Match
@@ -65,7 +65,7 @@ async def get_matches_per_competition(league_codes: list[str], client: httpx.Asy
   """Returns upcoming matches per competition — the response is an envelope
   {"count": 13, "resultSet": {...}, "competition: {...}", "matches": [...]}."""
   
-  today = datetime.date.today()
+  today = datetime.datetime.now(datetime.UTC).date()
   one_week = today + datetime.timedelta(days=7)
   params = {
     "status": "SCHEDULED",
@@ -81,6 +81,6 @@ async def get_matches_per_competition(league_codes: list[str], client: httpx.Asy
 
     league_matches = resp.json()["matches"]
     log.info("Fetched %d matches for %s", len(league_matches), code)
-    matches.extend(league_matches)
+    matches.extend(Match.model_validate(m) for m in league_matches)
 
   return matches

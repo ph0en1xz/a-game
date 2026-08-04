@@ -1,9 +1,8 @@
-import aio_pika
-
+import asyncio
 import json
 import logging
 
-import asyncio
+import aio_pika
 
 from app.config import settings
 from app.handlers import process_job

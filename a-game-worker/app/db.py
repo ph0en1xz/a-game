@@ -1,11 +1,9 @@
 import logging
-
-from datetime import date, datetime
-
-from app.model import Match
+from datetime import date
 
 import asyncpg
-import json
+
+from app.model import Match
 
 log = logging.getLogger("worker.db")
 
@@ -99,56 +97,54 @@ async def sync_matches_per_competition(pool: asyncpg.Pool, matches: list[Match])
     
     changed = 0
     for match in matches:
-        teams = [match["homeTeam"], match["awayTeam"]]
-        season = match["season"]
-        score_info = match["score"]
-        # referees is a list (often empty for SCHEDULED fixtures), not an object.
-        referees = match["referees"]
+        teams = [match.homeTeam, match.awayTeam]
+        season = match.season
+        score_info = match.score
+        referees = match.referees
 
-        async with pool.acquire() as conn:
-            async with conn.transaction():
+        async with pool.acquire() as conn, conn.transaction():
+            await conn.execute(
+                SEASON_QUERY,
+                season.id,
+                match.competition.id,
+                season.startDate,
+                season.endDate,
+            )
+            for team in teams:
+                # payload calls the crest URL `crest`; the column is `emblem`.
                 await conn.execute(
-                    SEASON_QUERY,
-                    season["id"],
-                    match["competition"]["id"],
-                    date.fromisoformat(season["startDate"]),
-                    date.fromisoformat(season["endDate"]),
+                    TEAMS_QUERY,
+                    team.id,
+                    team.name,
+                    team.shortName,
+                    team.tla,
+                    team.crest,
                 )
-                for team in teams:
-                    # payload calls the crest URL `crest`; the column is `emblem`.
-                    await conn.execute(
-                        TEAMS_QUERY,
-                        team["id"],
-                        team["name"],
-                        team.get("shortName"),
-                        team.get("tla"),
-                        team.get("crest"),
-                    )
-                row = await conn.fetchrow(
-                    MATCH_QUERY,
-                    match["id"],
-                    season["id"],
-                    match["homeTeam"]["id"],
-                    match["awayTeam"]["id"],
-                    match.get("matchday"), # returns None if "matchday" is missing
-                    datetime.fromisoformat(match["utcDate"]),
-                    match["status"],
-                    score_info.get("duration"), # returns None if "duration" is missing
-                    score_info["fullTime"]["home"],
-                    score_info["fullTime"]["away"],
-                    score_info["halfTime"]["home"],
-                    score_info["halfTime"]["away"],
-                    referees[0]["name"] if referees else None,
-                    json.dumps(match),
+            row = await conn.fetchrow(
+                MATCH_QUERY,
+                match.id,
+                season.id,
+                match.homeTeam.id,
+                match.awayTeam.id,
+                match.matchday,
+                match.utcDate,
+                match.status,
+                score_info.duration,
+                score_info.fullTime.home,
+                score_info.fullTime.away,
+                score_info.halfTime.home,
+                score_info.halfTime.away,
+                referees[0].name if referees else None,
+                match.model_dump_json(),
+            )
+            # No row means the change gate found nothing new — no event owed.
+            if row is not None:
+                changed += 1
+                await conn.execute(
+                    RABBIT_EVENT_QUERY,
+                    "match.changed",
+                    row["id"],
                 )
-                # No row means the change gate found nothing new — no event owed.
-                if row is not None:
-                    changed += 1
-                    await conn.execute(
-                        RABBIT_EVENT_QUERY,
-                        "match.changed",
-                        row["id"],
-                    )
 
     log.info("Synced %d changed matches of %d fetched", changed, len(matches))
     return changed
@@ -186,33 +182,32 @@ async def sync_competitions(pool: asyncpg.Pool, competitions: list[dict]) -> int
             start_date     = excluded.start_date,
             end_date       = excluded.end_date
     """
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            for comp in competitions:
-                await conn.execute(
-                    UPSERT_COMPETITION,
-                    comp["id"],
-                    comp["name"],
-                    comp["code"],
-                    comp["type"],
-                    comp.get("emblem"),
-                )
-                log.info(f"Upserted competition: {comp['name']} (ID: {comp['id']})")
+    async with pool.acquire() as conn, conn.transaction():
+        for comp in competitions:
+            await conn.execute(
+                UPSERT_COMPETITION,
+                comp["id"],
+                comp["name"],
+                comp["code"],
+                comp["type"],
+                comp.get("emblem"),
+            )
+            log.info(f"Upserted competition: {comp['name']} (ID: {comp['id']})")
 
-                # `currentSeason` means "most recent", not "live" — EC's is the 2024 Euros.
-                # It is also the only way to learn about a season that has no matches yet
-                # (PL 2502 starts 2026-08-21); historical seasons arrive via match payloads.
-                season = comp.get("currentSeason") or {}
-                if season.get("id") and season.get("startDate") and season.get("endDate"):
-                    await conn.execute(
-                        UPSERT_SEASON,
-                        season["id"],
-                        comp["id"],
-                        date.fromisoformat(season["startDate"]),
-                        date.fromisoformat(season["endDate"]),
-                    )
-                    log.info(f"Upserted season: {season['id']} for competition ID: {comp['id']}")
-                else:
-                    log.warning("Competition %s has no usable currentSeason; skipping season",
-                                comp["code"])
+            # `currentSeason` means "most recent", not "live" — EC's is the 2024 Euros.
+            # It is also the only way to learn about a season that has no matches yet
+            # (PL 2502 starts 2026-08-21); historical seasons arrive via match payloads.
+            season = comp.get("currentSeason") or {}
+            if season.get("id") and season.get("startDate") and season.get("endDate"):
+                await conn.execute(
+                    UPSERT_SEASON,
+                    season["id"],
+                    comp["id"],
+                    date.fromisoformat(season["startDate"]),
+                    date.fromisoformat(season["endDate"]),
+                )
+                log.info(f"Upserted season: {season['id']} for competition ID: {comp['id']}")
+            else:
+                log.warning("Competition %s has no usable currentSeason; skipping season",
+                            comp["code"])
     return len(competitions)
