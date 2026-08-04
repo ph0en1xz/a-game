@@ -1,0 +1,47 @@
+name: CI - k8s manifests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'k8s/**'
+      - '.github/workflows/ci-k8s-manifests.yml'
+  pull_request:
+    paths:
+      - 'k8s/**'
+      - '.github/workflows/ci-k8s-manifests.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # A throwaway API server is what makes this worth running. Offline schema
+      # linters catch unknown fields, but `policyTypes: [Igress]` is a plain
+      # string in the OpenAPI schema — only the real API server rejects it.
+      - name: Create throwaway cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          cluster_name: manifest-validation
+
+      # The namespace has to exist for real. A server dry-run never creates it,
+      # so every namespaced object in the files below would fail with
+      # "namespaces \"a-game\" not found" and bury the errors that matter.
+      - name: Create namespace
+        run: kubectl apply -f k8s/00-namespace.yaml
+
+      # Validates against a live API server without persisting anything:
+      # unknown fields, bad enum values, apiVersions that don't exist, and
+      # kinds with no registered resource. Not recursive, so k8s/test/ is skipped.
+      - name: Validate manifests
+        run: kubectl apply --dry-run=server -f k8s/

@@ -40,6 +40,7 @@ spec:
       port: 4000          # the port the Service listens on
       targetPort: 4000    # the containerPort it forwards to
 ---
+# Litellm deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:

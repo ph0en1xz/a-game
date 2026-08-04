@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from enum import Enum
 
-import models.prediction as Prediction
+from app.models.prediction import Prediction
 
 from app.__version__ import __version__
 
