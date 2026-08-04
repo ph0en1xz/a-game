@@ -1,17 +1,14 @@
 import logging
+from asyncio import CancelledError, create_task
+from contextlib import asynccontextmanager
+from enum import Enum
 
 from fastapi import FastAPI, Response
 from pydantic import BaseModel
 
-from enum import Enum
-from contextlib import asynccontextmanager
-
-from app.stores import make_pg_pool, make_redis
-from app.consumer import run_consumer
-
-from asyncio import create_task, CancelledError
-
 from app.__version__ import version as __version__
+from app.consumer import run_consumer
+from app.stores import make_pg_pool, make_redis
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("brain.main")

@@ -9,3 +9,11 @@ dependencies = [
     "httpx>=0.28",
     "pydantic-settings>=2.7",
 ]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+
+# asyncpg ships no py.typed marker, so mypy can't see its types.
+[[tool.mypy.overrides]]
+module = ["asyncpg.*"]
+ignore_missing_imports = true

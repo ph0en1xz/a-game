@@ -1,10 +1,10 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
 from enum import Enum
 
-import models.prediction as Prediction
+from fastapi import FastAPI
+from pydantic import BaseModel
 
 from app.__version__ import __version__
+from app.models.prediction import Prediction
 
 app = FastAPI(
     title="A-Game API",

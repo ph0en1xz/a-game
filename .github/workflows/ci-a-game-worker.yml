@@ -1,0 +1,54 @@
+name: CI - a-game-worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'a-game-worker/**'
+      - '.github/workflows/ci-a-game-worker.yml'
+  pull_request:
+    paths:
+      - 'a-game-worker/**'
+      - '.github/workflows/ci-a-game-worker.yml'
+
+jobs:
+  quality-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: a-game-worker
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: '0.11.28'
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run --with ruff ruff check .
+
+      - name: Type check
+        run: uv run --with mypy mypy app
+
+      - name: Tests
+        run: |
+          if [ -d tests ] || find . -maxdepth 2 -type f -name 'test*.py' | grep -q .; then
+            uv run --with pytest pytest -q
+          else
+            echo "No tests found for a-game-worker; skipping pytest."
+          fi
+
+      - name: Build Docker image
+        run: docker build -t a-game-worker:test .
