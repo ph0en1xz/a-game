@@ -36,7 +36,8 @@
 - **RabbitMQ — single broker** for jobs and events. Adopted explicitly as a **learning target** (ADR 0005, on the ADR 0002 precedent) — not a structural requirement.
 
 ## AI layer
-- **Claude (Anthropic)** via the official `anthropic` Python SDK — previews / value-bet narration. Haiku for bulk generation.
+- **All model calls go through the in-cluster LiteLLM gateway** (ADR 0008) — never a provider SDK pointed at the internet. The brain uses the **`openai` client library** against the gateway's cluster-internal Service, because LiteLLM speaks the OpenAI wire format; `anthropic` comes out of `a-game-brain/pyproject.toml` and `openai` goes in. The application asks for a model *alias* and holds no provider credential.
+- **Two providers behind the gateway** (2026-08-04): **Claude Haiku** (`claude-haiku` → `anthropic/claude-haiku-4-5-20251001`) as the primary route for previews / value-bet narration, with **OpenAI `gpt-4o-mini`** configured as its fallback. Swapping or adding a provider is a gateway ConfigMap change, not an application change.
 - Math stays **deterministic** (Elo/Poisson in code); AI only phrases the numbers, never invents stats. Spend is bounded by precompute (~10–20 calls per league per cycle) and, per ADR 0007, cycles only fire when upstream data actually changed.
 
 ## Infrastructure as Code
@@ -79,6 +80,8 @@
 
 ## Decisions
 See `docs/adr/` for decisions, `docs/input-spec.md` for engine detail, `docs/api-spec.md` (v2) for the API contract, `docs/schema.md` for the database schema, `docs/system-design/` for the diagram.
+- ✅ **Local validation split** — EKS Terraform stays plan-only (LocalStack Community has no EKS); Kubernetes learning runs on local k3s via k3d. **ADR 0009**, 2026-07-28.
+- ✅ **AI platform layer** — LiteLLM gateway, self-hosted Langfuse, CI eval gate (Tier 1); pgvector RAG + Argo (Tier 2); GPU serving doc-only (Tier 3). **ADR 0008**, 2026-07-22, amended 2026-07-30 (Langfuse is six components; Tier 1 runs before the infra track) and 2026-08-04 (second provider + fallback chain).
 - ✅ **Ingestion cadence** — daily at 06:00 UTC; "data ready" published only when the upsert changed rows; 3-season backfill is a one-off bootstrap. **ADR 0007**, 2026-07-16 (amends ADR 0005's 6h cadence).
 - ✅ **CI/CD** — GitHub Actions (CI + Terraform via OIDC); local `kubectl apply`; GitOps (Argo CD) deferred to EKS/prod phase. **ADR 0006**, 2026-07-10.
 - ✅ **v1 service architecture** — precompute pipeline; Postgres = prediction record; RabbitMQ single broker (learning); Redis cache-only; API keys; WS → Phase 2. **ADR 0005**, 2026-07-09 (amends ADR 0003's endpoint set).

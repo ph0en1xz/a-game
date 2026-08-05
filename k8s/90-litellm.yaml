@@ -15,11 +15,17 @@ data:
           model: anthropic/claude-haiku-4-5-20251001
           api_key: os.environ/ANTHROPIC_API_KEY
 
+      - model_name: gpt-4o-mini
+        litellm_params:
+          model: openai/gpt-4o-mini
+          api_key: os.environ/OPENAI_API_KEY
+
     litellm_settings:
       drop_params: true                  # Drops non-Anthropic OpenAI parameters safely
       set_verbose: false                 # Set to true only for staging/debugging logs
       num_retries: 2
       request_timeout: 50
+      fallbacks: [{"claude-haiku": ["gpt-4o-mini"]}]
 ---
 # Litellm service
 apiVersion: v1
@@ -67,7 +73,7 @@ spec:
         runAsUser: 999
       containers:
         - name: litellm
-          image: ghcr.io/berriai/litellm:main-v1.61.1
+          image: ghcr.io/berriai/litellm:main-v1.95.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -75,6 +81,8 @@ spec:
           envFrom:
             - secretRef:
                 { name: "anthropic-credentials" }
+            - secretRef:
+                { name: "openai-credentials" }
           volumeMounts: # where to put a volume
             - name: config
               mountPath: /etc/litellm
