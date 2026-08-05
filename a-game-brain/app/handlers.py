@@ -28,6 +28,6 @@ async def process_job(match_id: int, pg: Pool, redis: Redis):
         # TODO: swap this for real Elo + Poisson compute + result writes once the
         # predictions schema exists.
         log.info("processed match %d (%s, status=%s) (stub)",
-                 match_id, match["fulltime_outcome"], match["status"])
+                 match_id, match.fulltime_outcome, match.status)
     except Exception:  # broad on purpose - one bad message must not kill the consumer
         log.exception("Error processing job")
