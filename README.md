@@ -118,7 +118,16 @@ The application asks for a model alias and never learns which provider answered.
 That does mean one pod now holds two providers' keys. The blast radius is still a single pod, and
 a gateway per provider would double the workload count to narrow it no further.
 
-Tracing (Langfuse) and eval gating in CI are the next pieces and aren't built yet.
+Tracing (Langfuse) and eval gating in CI are the next pieces and aren't built yet. The eval
+harness is the flagship of the whole layer, not a checkbox: a golden fixture set committed to
+the repo, a fact-checker that turns "the AI never invents stats" into a CI assertion, an
+LLM-as-judge whose own prompt is versioned, and a regression gate — a prompt change goes
+through a PR like a code change, and can fail the build like one. The same harness then drives
+a model-comparison report (quality, latency, cost per preview, per route), so the choice of
+primary and fallback is measured rather than configured. Planned behind those: a tool-using
+match-analyst agent, a self-hosted ~3B model as a third gateway route at CPU scale, and an AI
+threat-model doc (ADR 0008, 2026-08-05). Deliberate non-goals: fine-tuning, chatbots,
+semantic caching.
 
 ### Infrastructure
 
@@ -166,7 +175,8 @@ hidden.
 - **[ADR 0004](docs/adr/0004-language-switch-python.md) — switch to Python.** Reverses an earlier
   decision. The prediction engine is numerical work and the ecosystem argument won.
 - **[ADR 0008](docs/adr/0008-ai-platform-layer.md) — an AI platform layer, not an SDK call.**
-  Gateway, tracing, evals in CI.
+  Gateway, tracing, and — as the flagship — evals in CI; plus an agent, a self-hosted route,
+  and a threat model (2026-08-05 amendment).
 
 ## Things that broke, and why
 

@@ -1,6 +1,6 @@
 # ADR 0008 — AI platform layer: gateway, observability, evals, RAG, orchestration
 
-- **Status:** Accepted — **amended 2026-07-30, 2026-08-04** (see §Amendments)
+- **Status:** Accepted — **amended 2026-07-30, 2026-08-04, 2026-08-05** (see §Amendments)
 - **Date:** 2026-07-22
 - **Amends:** ADR 0005 — its precompute pipeline stands, but the calc service no longer calls
   the Anthropic API directly (§Decision 1 below); the Claude call now goes through an
@@ -268,3 +268,81 @@ step ahead of the provider change, because ~34 minor versions of config-schema d
 
 Note for step 3: `num_retries: 2` is already set, so a failing primary retries twice *before* the
 fallback engages. The switch therefore presents as latency, not as an immediate failover.
+
+### 2026-08-05 — scope re-weighted: evals become the flagship; agentic and self-hosted routes added; non-goals fixed
+
+**Decisions recorded, none yet built.** Nothing here reorders the 2026-07-30 sequencing — Tier 1
+still completes first (`commentary.py` → Langfuse → eval gate), and everything below either
+enriches a Tier 1 item or lands after it.
+
+The tier list weights its six items roughly equally. That weighting is wrong for the role this
+ADR exists to signal. As model output gets cheaper to produce, the market value concentrates in
+**verifying, selecting, and operating** models, not calling them — so the eval harness is the
+highest-value artifact in this entire layer, not item 3 of 6. The additions below re-weight the
+scope accordingly. The acceptance test for every item, old and new: **it must produce an artifact
+showable in five minutes** — a failing CI run, a comparison table, a trace, a document. "I used X"
+without an artifact is not scope.
+
+**1. The eval harness (Tier 1, item 3) is the flagship deliverable of the layer.** Its one-line
+spec expands to:
+
+- a **golden dataset** of 30–50 fixtures with known facts, committed to the repo;
+- **deterministic checks**: JSON schema validity, length bounds, both team names present, and a
+  **fact-checker asserting the preview contains no statistic or claim absent from its input** —
+  the README's "AI never invents stats" promise turned into a CI assertion;
+- **LLM-as-judge** for tone and fluency, with the judge's prompt versioned like code;
+- a **regression gate in GitHub Actions**: a prompt or model change that drops scores cannot
+  merge. Prompts are versioned artifacts; a prompt change is a PR through the same gate as code.
+
+**2. New Tier 1 deliverable: a model-comparison report.** Run the same eval set across every
+gateway route — `claude-haiku` and `gpt-4o-mini` now, the self-hosted route below later — and
+produce one page: quality scores, latency p50/p95, cost per preview. This converts the 2026-08-04
+fallback configuration from "what I happened to configure" into a measured selection, and it is
+the cheapest artifact in the layer once the harness exists.
+
+**3. New Tier 2 item: a tool-using agent.** Everything in the layer so far is single-shot
+completion; the agentic surface — tool schemas, loops, termination, failure modes — is absent.
+Smallest honest version: a **match-analyst agent** that, instead of receiving stuffed context,
+calls tools — `get_recent_form(team_id)`, `get_h2h(a, b)`, `get_standings(competition)` — against
+the existing Postgres, with a hard iteration cap, validated tool calls, and every step traced in
+Langfuse. One module, three tools. The artifact is the trace of an agent run — including a failed
+one.
+
+**4. Tier 3 is partially de-scoped from "document-only": a self-hosted small model joins the
+gateway as a third route.** A small open-weights model (Ollama-served, ~3B class) runs as an
+ordinary k3d workload and registers in the LiteLLM `model_list` beside the two commercial routes.
+The gateway story becomes *commercial + self-hosted behind one interface*, and inference serving
+(resource limits, cold starts, quantization trade-offs) is touched at CPU scale with no GPU
+spend. The comparison report extends to three routes — a 3B model failing the fact-check evals is
+itself a portfolio artifact. **The GPU design (vLLM/KServe, GPU node group, taints/autoscaling)
+remains document-only exactly as Tier 3 states.** The tier's framing changes from "designed, not
+run" to "run at CPU scale; GPU designed."
+
+**5. New document: an AI threat model** (ADR-style, one page, under `docs/`): the prompt-injection
+surface — today every prompt input is a trusted fact from our own Postgres, and the document must
+say *why* that holds and what changes the moment user-supplied text reaches a prompt; data
+exfiltration paths; credential blast radius (one pod, two keys — cost 1 of the 2026-08-04
+amendment); the egress posture and its documented `0.0.0.0/0:443` exception (cost 2); and cost
+abuse. Cheap to write, rare to have.
+
+**6. Cost observability gains a trigger.** The per-route budget caps (cost 3 of 2026-08-04) plus
+one alert: fallback fired, or a route crossing 80% of its budget, must surface visibly rather
+than be discovered on the bill.
+
+**7. Tier 2's RAG item is amended: retrieval is evaluated separately from generation.** Recall@k
+against a small labeled set *before* any generation-quality claim, feeding the same harness.
+Without that, pgvector is a tutorial artifact, not an infrastructure one.
+
+**Non-goals, decided now so they stop being open questions:** fine-tuning (weak signal for the
+platform role relative to cost); any chatbot or UI (zero platform signal); semantic response
+caching (previews are precomputed once per cycle — there is no repeat-request pattern to cache);
+further pod-hardening beyond the current baseline (that well is tapped).
+
+**Costs, stated plainly:** this is the second scope expansion of a learning project in a week —
+accepted because each item passes the five-minute-artifact test above, and the non-goals list is
+the counterweight. The local model adds real laptop RAM pressure next to ClickHouse's ~2GB
+(2026-07-30 amendment); if memory forces a choice, **the local model yields before Langfuse does**
+— observability is closer to the flagship than a third route is. The agent adds a
+nondeterministic loop to a deliberately deterministic system; the iteration cap and Langfuse
+traces are the containment, and the agent stays out of the daily pipeline until its traces have
+been read.
