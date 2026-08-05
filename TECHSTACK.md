@@ -38,7 +38,8 @@
 ## AI layer
 - **All model calls go through the in-cluster LiteLLM gateway** (ADR 0008) — never a provider SDK pointed at the internet. The brain uses the **`openai` client library** against the gateway's cluster-internal Service, because LiteLLM speaks the OpenAI wire format; `anthropic` comes out of `a-game-brain/pyproject.toml` and `openai` goes in. The application asks for a model *alias* and holds no provider credential.
 - **Two providers behind the gateway** (2026-08-04): **Claude Haiku** (`claude-haiku` → `anthropic/claude-haiku-4-5-20251001`) as the primary route for previews / value-bet narration, with **OpenAI `gpt-4o-mini`** configured as its fallback. Swapping or adding a provider is a gateway ConfigMap change, not an application change.
-- Math stays **deterministic** (Elo/Poisson in code); AI only phrases the numbers, never invents stats. Spend is bounded by precompute (~10–20 calls per league per cycle) and, per ADR 0007, cycles only fire when upstream data actually changed.
+- Math stays **deterministic** (Elo/Poisson in code); AI only phrases the numbers, never invents stats — and that promise is **enforced as a CI assertion** by the eval harness, the layer's flagship deliverable (golden dataset, fact-checker, LLM-as-judge, regression gate; ADR 0008, 2026-08-05). Spend is bounded by precompute (~10–20 calls per league per cycle) and, per ADR 0007, cycles only fire when upstream data actually changed.
+- **Planned additions (decided 2026-08-05, none built):** model-comparison report per gateway route; tool-using match-analyst agent (Tier 2); self-hosted ~3B model as a third gateway route at CPU scale (Tier 3 partial — GPU stays doc-only); AI threat-model doc; per-route budget caps + cost alert. Non-goals: fine-tuning, chatbot/UI, semantic caching.
 
 ## Infrastructure as Code
 - **Terraform.** Run against **LocalStack** locally ($0); real AWS at deploy time. State segmented by layer + env (see `infrastructure/`).
@@ -81,7 +82,7 @@
 ## Decisions
 See `docs/adr/` for decisions, `docs/input-spec.md` for engine detail, `docs/api-spec.md` (v2) for the API contract, `docs/schema.md` for the database schema, `docs/system-design/` for the diagram.
 - ✅ **Local validation split** — EKS Terraform stays plan-only (LocalStack Community has no EKS); Kubernetes learning runs on local k3s via k3d. **ADR 0009**, 2026-07-28.
-- ✅ **AI platform layer** — LiteLLM gateway, self-hosted Langfuse, CI eval gate (Tier 1); pgvector RAG + Argo (Tier 2); GPU serving doc-only (Tier 3). **ADR 0008**, 2026-07-22, amended 2026-07-30 (Langfuse is six components; Tier 1 runs before the infra track) and 2026-08-04 (second provider + fallback chain).
+- ✅ **AI platform layer** — LiteLLM gateway, self-hosted Langfuse, CI eval gate (Tier 1); pgvector RAG + Argo (Tier 2); GPU serving doc-only (Tier 3). **ADR 0008**, 2026-07-22, amended 2026-07-30 (Langfuse is six components; Tier 1 runs before the infra track), 2026-08-04 (second provider + fallback chain), and 2026-08-05 (evals become the flagship; model-comparison report; tool-using agent; self-hosted CPU-scale model route; AI threat model; non-goals fixed).
 - ✅ **Ingestion cadence** — daily at 06:00 UTC; "data ready" published only when the upsert changed rows; 3-season backfill is a one-off bootstrap. **ADR 0007**, 2026-07-16 (amends ADR 0005's 6h cadence).
 - ✅ **CI/CD** — GitHub Actions (CI + Terraform via OIDC); local `kubectl apply`; GitOps (Argo CD) deferred to EKS/prod phase. **ADR 0006**, 2026-07-10.
 - ✅ **v1 service architecture** — precompute pipeline; Postgres = prediction record; RabbitMQ single broker (learning); Redis cache-only; API keys; WS → Phase 2. **ADR 0005**, 2026-07-09 (amends ADR 0003's endpoint set).

@@ -241,7 +241,7 @@
   <header>
     <p class="eyebrow">A-Game · AI platform layer · ADR 0008</p>
     <h1>The platform around the models — gateway, tracing, evals, orchestration</h1>
-    <p class="lede">The daily pipeline is <b>designed</b> to predict (Elo + Poisson) and narrate (Claude Haiku, falling back to OpenAI) — as of 2026-08-04 neither is built yet; <code>handlers.py</code> is a stub, and the second provider route is specified but not applied. This layer wraps the LLM call in the operational surface an AI platform needs: one controlled egress hop, per-request cost/latency tracing, retrieval grounding, and DAG orchestration — all as ordinary private-subnet workloads. The numbers being predicted don't change.</p>
+    <p class="lede">The daily pipeline is <b>designed</b> to predict (Elo + Poisson) and narrate (Claude Haiku, falling back to OpenAI) — as of 2026-08-05 neither is built yet; <code>handlers.py</code> is a stub, and the second provider route is specified but not applied. This layer wraps the LLM call in the operational surface an AI platform needs: one controlled egress hop, per-request cost/latency tracing, retrieval grounding, and DAG orchestration — all as ordinary private-subnet workloads. The numbers being predicted don't change. <b>Re-weighted 2026-08-05:</b> the CI eval gate is the layer's flagship deliverable (golden dataset, fact-checker, LLM-as-judge, regression block), with a model-comparison report, a tool-using agent, and a self-hosted CPU-scale third route added behind it — decided, not drawn here yet.</p>
   </header>
 
   <div class="stage">
@@ -351,7 +351,7 @@
     <!-- CI eval gate lane -->
     <div class="ci" style="width:100%">
       <span class="badge">CI · GitHub Actions<span class="tierpill t1" style="margin-left:6px">Tier 1</span></span>
-      <span class="txt"><b>Eval harness gates every merge:</b> structured-output validation · factuality vs. real stats · regression on a fixed fixture set. A regression blocks the merge.</span>
+      <span class="txt"><b>Eval harness gates every merge — the flagship deliverable (2026-08-05):</b> golden fixture set in-repo · fact-checker (no statistic absent from the input) · LLM-as-judge, judge prompt versioned · regression blocks the merge. Prompts are PR-gated artifacts; the same harness drives the per-route model-comparison report.</span>
     </div>
 
   </div>
@@ -386,7 +386,7 @@
     <div><b>Why the gateway is the centerpiece.</b> Routing every LLM call through one pod means the blast radius of the provider credentials and the egress path is a <b>single workload</b> — the NetworkPolicy allows external <span class="mono">:443</span> from the gateway only, and IRSA scopes the Secrets to the gateway's ServiceAccount alone. Since 2026-08-04 that pod holds <b>two</b> providers' keys, with Claude Haiku falling back to OpenAI: one workload still, but a wider secret. The egress rule is <span class="mono">0.0.0.0/0:443</span> rather than provider CIDRs — both sit behind rotating CDN ranges — so the enforced boundary is <i>which pod may leave</i>, not where it may go.</div>
     <div><b>Not drawn: GPU serving (Tier 3).</b> Self-hosted vLLM / KServe on a GPU node group is designed in ADR 0008 but stays document-only — the accent here is that the whole platform runs on ordinary CPU workloads at ~$0 locally.</div>
     <div><b>Argo is an open fork (Tier 2).</b> Either it replaces only the daily <span class="mono">worker</span> scheduler — brain stays a RabbitMQ consumer — <b>or</b> it models the whole pipeline as a DAG and RabbitMQ drops its trigger role. Not both, and brain is never triggered on a timer. Defaulting toward the first.</div>
-    <div><b>Sequencing (revised 2026-07-30).</b> This layer now lands <b>first</b>, ahead of the EKS-portability and app-correctness tracks — ADR 0009 made the EKS cluster layer plan-only, so waiting on the infra track would mean waiting forever. Tier 1 depends on no applied AWS resource. Build order within the tier is unchanged: gateway → Langfuse → eval gate → pgvector → Argo.</div>
+    <div><b>Sequencing (revised 2026-07-30).</b> This layer now lands <b>first</b>, ahead of the EKS-portability and app-correctness tracks — ADR 0009 made the EKS cluster layer plan-only, so waiting on the infra track would mean waiting forever. Tier 1 depends on no applied AWS resource. Build order (revised 2026-08-05): gateway → Langfuse → eval gate (flagship) → comparison report → threat-model doc + budget alerts → pgvector (with retrieval evals) → agent → self-hosted route → Argo.</div>
     <div><b>No new Python services.</b> Tier 1 adds five workloads (LiteLLM, langfuse-web, langfuse-worker, ClickHouse, MinIO) and every one is an off-the-shelf image. The only Python written is <span class="mono">commentary.py</span> plus edits to <span class="mono">handlers.py</span> / <span class="mono">config.py</span>, all inside the existing brain service, and the eval fixtures in CI.</div>
   </div>
 

@@ -73,7 +73,7 @@ spec:
         runAsUser: 999
       containers:
         - name: litellm
-          image: ghcr.io/berriai/litellm:main-v1.95.0
+          image: ghcr.io/berriai/litellm:v1.95.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -88,17 +88,21 @@ spec:
               mountPath: /etc/litellm
               readOnly: true
           args: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+          # startupProbe:
+          #   httpGet: { path: /health/liveness, port: 4000 }
+          #   periodSeconds: 5
+          #   failureThreshold: 36
           livenessProbe:
-              httpGet: { path: /health/liveliness, port: 4000 }
-              initialDelaySeconds: 20
-              periodSeconds: 15
+            httpGet: { path: /health/liveness, port: 4000 }
+            timeoutSeconds: 3
+            periodSeconds: 15
           readinessProbe:
-              httpGet: { path: /health/readiness, port: 4000 }
-              initialDelaySeconds: 20
-              periodSeconds: 15
+            httpGet: { path: /health/readiness, port: 4000 }
+            timeoutSeconds: 3
+            periodSeconds: 15
           resources:
-            requests: { cpu: 100m, memory: 256Mi }
-            limits:   { cpu: 500m, memory: 512Mi }
+            requests: { cpu: 100m, memory: 512Mi }
+            limits:   { cpu: 500m, memory: 2Gi }
           # No readOnlyRootFilesystem here: it's a third-party image and we
           # don't know what it writes. These two cost nothing either way.
           securityContext:

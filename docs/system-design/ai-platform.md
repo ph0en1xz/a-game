@@ -1,6 +1,6 @@
 # A-Game — AI platform layer
 
-Current as of **2026-08-04**. Design reference for the AI-infra scope expansion decided in
+Current as of **2026-08-05**. Design reference for the AI-infra scope expansion decided in
 **ADR 0008**. This describes the platform *around* the models — not the models themselves
 (Elo/Poisson lives in the engine; the LLM prompt lives in `docs/prompts/`).
 
@@ -18,6 +18,13 @@ Tier 1 first, then Tier 2; Tier 3 stays a design.
 > (ADR 0008 §Amendments, 2026-08-04). Sections below reflect that decision; the manifest change
 > is **specified, not applied**, so nothing here should be read as observed behaviour. The
 > gateway image bump lands first, as its own step.
+>
+> **Update, 2026-08-05.** Scope re-weighted (ADR 0008 §Amendments, 2026-08-05): the **eval
+> harness is now the flagship deliverable** of the layer, a **model-comparison report** joins
+> Tier 1, a **tool-using agent** joins Tier 2, a **self-hosted small model (CPU-scale)**
+> becomes a third gateway route (partially de-scoping Tier 3 from document-only), an **AI
+> threat-model doc** and a **cost alert trigger** are added, and non-goals are fixed
+> (fine-tuning, chatbot/UI, semantic caching, further pod-hardening). All decided, none built.
 
 ## Why this layer exists
 
@@ -35,10 +42,13 @@ without changing what gets predicted.
 |---|---|---|---|---|
 | 1 | **LiteLLM gateway** | Deployment + Service | ~free | One controlled hop for every LLM call: rate limits, budget caps, caching, retries, fallback. Two routes — `claude-haiku` (Anthropic) primary, `gpt-4o-mini` (OpenAI) as its configured fallback. Sole holder of **both** provider credentials; the only workload with external egress besides the worker. |
 | 1 | **Langfuse** | 4 new workloads (`langfuse-web`, `langfuse-worker`, ClickHouse, MinIO) + a database and a Redis index on the app's existing stores | ~free | Per-request tracing: tokens, cost, latency, prompt, response, model version. **v3 is six components, not one** — see ADR 0008 §Amendments (option C). |
-| 1 | **Eval harness** | GitHub Actions job | free | Structured-output validation + factuality vs. real stats + regression on a fixed fixture set; blocks merge on regression. |
-| 2 | **pgvector RAG** | `vector` extension on existing Postgres | free | Retrieve similar historical matches to ground each preview. No new datastore. |
+| 1 | **Eval harness — the flagship deliverable of the layer** (2026-08-05) | GitHub Actions job + repo fixtures | free | Golden dataset (30–50 fixtures, committed); deterministic checks incl. a **fact-checker asserting no statistic absent from the input** (the "AI never invents stats" promise as a CI assertion); LLM-as-judge with a versioned judge prompt; regression gate — a prompt or model change that drops scores cannot merge. Prompts are PR-gated artifacts. |
+| 1 | **Model-comparison report** (2026-08-05) | Output of the eval harness | free | Same eval set across every gateway route: quality scores, latency p50/p95, cost per preview. Converts the fallback configuration into a measured selection. Extends to three routes once the self-hosted model lands. |
+| 2 | **pgvector RAG** | `vector` extension on existing Postgres | free | Retrieve similar historical matches to ground each preview. No new datastore. **Retrieval evaluated separately from generation** (recall@k on a labeled set, 2026-08-05) — feeding the same harness. |
+| 2 | **Tool-using agent** (2026-08-05) | Module in brain (no new workload) | ~free | Match-analyst agent calling three tools (`get_recent_form`, `get_h2h`, `get_standings`) against existing Postgres; hard iteration cap, validated tool calls, every step traced in Langfuse. Stays out of the daily pipeline until its traces have been read. |
 | 2 | **Argo Workflows** | Controller + CRDs | ~free | Retries, backfills, run UI for the daily pipeline. **Open fork (see below):** either replaces just the worker scheduler (brain stays event-driven) or models the whole pipeline as a DAG. Never triggers brain on a timer. |
-| 3 | **vLLM / KServe** | GPU node group | $$ — **doc-only** | Self-hosted inference. Designed, provable briefly, never left running. |
+| 3 | **Self-hosted model route** (2026-08-05) | Ollama Deployment, CPU, ~3B model | ~free | Third `model_list` route beside the two commercial ones: *commercial + self-hosted behind one interface*. Inference serving at CPU scale — resource limits, cold starts, quantization trade-offs — no GPU spend. Yields before Langfuse does if laptop RAM forces a choice. |
+| 3 | **vLLM / KServe** | GPU node group | $$ — **doc-only** | GPU inference. Designed, provable briefly, never left running. Unchanged by the CPU-scale route above. |
 
 ## Request flow (with the platform in place)
 
@@ -141,7 +151,20 @@ scope reads straight off the topology.
   Haiku route does not bound the fallback. A primary outage that trips the fallback shifts spend
   to OpenAI silently unless `gpt-4o-mini` carries its own cap — set both, not one.
 - **Tier 3:** GPU node group is the only materially expensive piece — kept document-only and
-  proven briefly, never standing.
+  proven briefly, never standing. The CPU-scale Ollama route (2026-08-05) costs no money but
+  real laptop RAM next to ClickHouse's ~2GB; **if memory forces a choice, the local model
+  yields before Langfuse does** — observability is closer to the flagship than a third route is.
+- **Spend must surface, not be discovered (2026-08-05).** One alert: fallback fired, or a
+  route crossing 80% of its budget cap.
+
+## Non-goals (fixed 2026-08-05)
+
+Decided so they stop being open questions — see ADR 0008 §Amendments (2026-08-05) for the
+reasoning: **fine-tuning** (weak signal for the platform role relative to cost), **any chatbot
+or UI** (zero platform signal), **semantic response caching** (previews are precomputed once
+per cycle — no repeat-request pattern to cache), **further pod-hardening** beyond the current
+baseline. The acceptance test for anything proposed in this layer: it must produce an artifact
+showable in five minutes — a failing CI run, a comparison table, a trace, a document.
 
 ## Build order
 
@@ -151,11 +174,23 @@ scope reads straight off the topology.
    next: **bump the image** → **confirm the Haiku route still answers** → **add the OpenAI route**
    → **add `fallbacks` and prove the switch fires**. See ADR 0008 §Amendments (2026-08-04).
 2. **Langfuse** — deploy + wire the gateway's tracing.
-3. **Eval harness** — add the CI job + fixture set.
-4. **pgvector RAG** — enable extension, add retrieval to `commentary.py`.
-5. **Argo Workflows** — settle the fork first (defaulting to (A) scheduler-only), then
-   introduce Argo accordingly.
-6. **vLLM/KServe** — design ADR + Terraform GPU nodegroup; prove briefly; leave off.
+3. **Eval harness — the flagship** — golden dataset committed to the repo, deterministic
+   checks + fact-checker, LLM-as-judge (versioned judge prompt), regression gate in CI.
+4. **Model-comparison report** — cheapest artifact once the harness exists: both routes,
+   quality/latency/cost per preview.
+5. **AI threat-model doc** — one ADR-style page under `docs/`; needs nothing running beyond
+   the gateway, so it can land any time from here on.
+6. **Per-route budget caps + cost alert** — caps on both routes; alert on fallback-fired or
+   80% of a route's budget.
+7. **pgvector RAG** — enable extension, add retrieval to `commentary.py`; **retrieval
+   evals (recall@k) before any generation-quality claim**.
+8. **Tool-using agent** — three tools, iteration cap, Langfuse-traced; out of the daily
+   pipeline until its traces have been read.
+9. **Self-hosted model route** — Ollama (~3B, CPU) as a third `model_list` entry; extend the
+   comparison report to three routes.
+10. **Argo Workflows** — settle the fork first (defaulting to (A) scheduler-only), then
+    introduce Argo accordingly.
+11. **vLLM/KServe** — design ADR + Terraform GPU nodegroup; prove briefly; leave off.
 
 ## Impact on the existing k8s design & services
 
@@ -209,7 +244,12 @@ the five new workloads are all off-the-shelf images you configure with YAML.
   text) so evals can assert on it.
 - **pgvector retrieval (Tier 2):** add an embed → similarity-query step in `commentary.py`; a
   `vector` column/table + migration; one new dependency.
-- **Eval harness:** new test module + fixture set, wired into the GitHub Actions workflow.
+- **Eval harness:** new test module + the golden fixture set, wired into the GitHub Actions
+  workflow; the fact-checker and the judge prompt live here too. The comparison report is a
+  script over the same harness, not a new system.
+- **Tool-using agent (Tier 2, 2026-08-05):** one module in brain, three tool functions over
+  the existing `db.py` queries, a hard iteration cap, tool-call validation. No new service,
+  no new workload.
 - **Argo (Tier 2):** only if the fork resolves to (B) full DAG — each stage must be
   independently invokable as a DAG step (a separate entrypoint into the *same* image, not a
   separate service). Minor entrypoint tidy-up; commentary stays part of brain either way.
@@ -227,9 +267,14 @@ Concrete, current-state → target, in build order:
 | 3 | Python | **`commentary.py` (new file, in the brain pod — not a new service):** `openai` client pointed at the gateway Service; `LITELLM_BASE_URL` + virtual key in brain's env, never `ANTHROPIC_API_KEY`. Swap `anthropic` → `openai` in `pyproject.toml` |
 | 4 | Python | **`commentary.py`:** return pydantic-validated JSON (structured output), not free text |
 | 5 | k8s | **Add** `langfuse-web` + `langfuse-worker` Deployments, ClickHouse + MinIO StatefulSets (all ClusterIP); give Langfuse a dedicated database on the app Postgres and a dedicated `REDIS_DB` index (option C); wire the gateway to emit traces to it |
-| 6 | CI | **Add** an eval-harness job to the GitHub Actions workflow (structured-output + factuality + fixture regression); block merge on regression |
+| 6 | CI | **Add** the eval-harness job to the GitHub Actions workflow — golden dataset in-repo, deterministic checks + fact-checker, LLM-as-judge, regression gate blocking merge. **This is the flagship deliverable of the layer** (2026-08-05) |
+| 6b | Evals | **Produce** the model-comparison report from the same harness: quality / latency p50–p95 / cost per preview, per gateway route (2026-08-05) |
+| 6c | Docs | **Write** the AI threat-model doc under `docs/` — prompt-injection surface, exfiltration paths, credential blast radius, egress exception, cost abuse (2026-08-05) |
+| 6d | Gateway | **Set** per-route budget caps on both routes + one alert (fallback fired / 80% of budget) (2026-08-05) |
 | 7 | NetworkPolicy | **Extend** the existing lockdown (applied 2026-07-30): brain gains egress to the gateway on `:4000` and no internet rule; new `allow-litellm-egress` (`0.0.0.0/0:443`, `except` pod + Service CIDRs) and `allow-litellm` ingress from brain on `:4000` |
-| 8 | Postgres/Python | **Enable** `vector` extension; add a vectors table/column + migration; add embed→similarity retrieval to `commentary.py` (Tier 2) |
+| 8 | Postgres/Python | **Enable** `vector` extension; add a vectors table/column + migration; add embed→similarity retrieval to `commentary.py`; **retrieval evals (recall@k) before generation claims** (Tier 2) |
+| 8b | Python | **Add** the match-analyst agent module to brain — three tools over existing `db.py`, iteration cap, Langfuse-traced; excluded from the daily pipeline until traces reviewed (Tier 2, 2026-08-05) |
+| 8c | k8s | **Add** an Ollama Deployment (CPU, ~3B model) and register it as a third `model_list` route; extend the comparison report to three routes (Tier 3 partial, 2026-08-05) |
 | 9 | k8s/Python | **Introduce** Argo (Tier 2) — pick the fork first: (A) replace only the worker CronJob scheduler, brain stays a RabbitMQ consumer; or (B) full DAG, RabbitMQ drops its trigger role. Make each stage independently invokable only if (B) |
 | 10 | Diagrams | **Refresh** `k8s-deployment-view.svg` + `cluster-runtime-view.svg` with the new workloads |
 | — | Terraform | **Not a prereq (revised 2026-07-30).** The app-layer IaC gains the gateway ServiceAccount IRSA role + Anthropic Secret wiring, but that is the EKS half and lands later — ADR 0009 keeps the cluster layer plan-only. Tier 1 runs entirely on k3d with a hand-created Secret |

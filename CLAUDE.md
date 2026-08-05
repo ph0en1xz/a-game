@@ -6,7 +6,8 @@ Football statistics and predictions app built on the football-data.org API: Elo 
 
 ## Read these first
 - `TECHSTACK.md` — fast-load stack reference (runtime, services, DB, IaC, commands). Authoritative for the stack.
-- `docs/adr/` — decisions 0001–0005. Current state = **0002** (EKS prod target for learning), **0003** (API-only surface), **0004** (Python stack), **0005** (precompute architecture). ADR 0001 survives only in its Postgres/Terraform/Docker/Claude portions.
+- `docs/adr/` — decisions 0001–0009. Current state = **0002** (EKS prod target for learning), **0003** (API-only surface), **0004** (Python stack), **0005** (precompute architecture), **0006** (GitHub Actions CI/CD; GitOps deferred), **0007** (daily, change-gated ingestion), **0008** (AI platform layer — LiteLLM gateway, Langfuse, **CI evals as the flagship**; amended through 2026-08-05), **0009** (EKS Terraform plan-only; Kubernetes learning on local k3s). ADR 0001 survives only in its Postgres/Terraform/Docker/Claude portions.
+- `docs/system-design/ai-platform.md` — the AI platform layer design (gateway routes, Langfuse, eval harness, build order). Read before touching anything AI-related.
 - `docs/api-spec.md` (v2) — the public HTTP contract.
 - `docs/input-spec.md` — v1 input specification and the Elo/Poisson engine design table.
 - `docs/system-design/` — layered architecture + flow diagrams (README has the reading order).
@@ -15,12 +16,12 @@ Football statistics and predictions app built on the football-data.org API: Elo 
 - **Data source:** football-data.org free tier (matches, standings, scorers, teams, persons). Odds and shot-level xG are paid and out of v1 scope; injuries are v2.
 - **Engine:** Elo + Poisson, computed deterministically in code. The AI layer only phrases numbers — it never invents stats.
 - **Architecture (ADR 0005 — precompute, do not reopen):** worker CronJob (daily 06:00 UTC, ADR 0007) → Postgres upsert → RabbitMQ "data ready" job → brain recomputes ALL upcoming fixtures + Haiku narration → Postgres (permanent, model-versioned — calibration tracking) → warm Redis. The API does plain reads; no compute-on-request, no pending/polling states.
-- **Roles:** Postgres = only system of record · Redis = read-through cache, removable · RabbitMQ = single broker, adopted as a learning target.
+- **Roles:** Postgres = only system of record · Redis = read-through cache — **no longer removable once Langfuse lands**: it becomes a trace queue too, on a dedicated `REDIS_DB` index (ADR 0008, 2026-07-30) · RabbitMQ = single broker, adopted as a learning target.
 
 ## Environment
 - Local dev runs entirely on the laptop at **$0**: Docker + k3s (via k3d) + LocalStack (AWS emulation) + a Postgres container + Terraform pointed at LocalStack.
 - Bring the data services up from the repo root: `docker compose up -d` (LocalStack on 4566, Postgres on 5432).
-- The AWS CLI is wrapped by `awslocal` (targets `localhost:4566`). Terraform lives in `infrastructure/`, segmented by layer (`network/`, `app/`; `cluster/` planned) with remote S3 state in LocalStack.
+- The AWS CLI is wrapped by `awslocal` (targets `localhost:4566`). Terraform lives in `infrastructure/`, segmented by layer (`network/` **applied**, `cluster/` **plan-only** — LocalStack Community has no EKS, ADR 0009 — and `app/`) with remote S3 state in LocalStack.
 
 ## Non-negotiables
 - **$0 local-first.** No AWS spend until a deliberate go-live; everything is emulated locally. (One planned exception: a single ephemeral real-EKS session ~$2, destroyed same day.)
@@ -42,9 +43,9 @@ The secret-consumption rule in Non-negotiables is what makes step 2 additive rat
 - Terraform: `terraform -chdir=infrastructure/<layer> plan|apply` (endpoints → LocalStack)
 
 ## Structure
-- `docs/` — ADRs, api-spec (v2), input-spec, system-design diagrams, prompts.
-- `infrastructure/` — layered Terraform roots: `network/` (in progress), `app/` (S3 state working); `cluster/` planned.
-- `k8s/` — hand-written learning manifests for the local k3d cluster (numbered: namespace, serviceaccounts, Postgres, Redis, RabbitMQ).
-- `a-game-api/` — throwaway FastAPI hello-world experiment; **not** the real scaffold.
+- `docs/` — ADRs (0001–0009), api-spec (v2), input-spec, schema, system-design diagrams + `ai-platform.md`.
+- `infrastructure/` — layered Terraform roots: `network/` (**applied** against LocalStack), `cluster/` (**plan-only**, ADR 0009), `app/` (S3 state working).
+- `k8s/` — hand-written manifests for the local k3d cluster (numbered 00–90): namespace, ServiceAccounts, Postgres, Redis, RabbitMQ, api, brain, worker, **default-deny NetworkPolicies in both directions** (`50-`), and the **LiteLLM gateway** (`90-`). Workloads are hardened: non-root, capabilities dropped, read-only rootfs, no SA token automount.
+- `a-game-api/`, `a-game-brain/`, `a-game-worker/` — the three Python services (FastAPI api; brain = RabbitMQ consumer with `handlers.py`/`db.py`/`stores.py`; worker = ingestion with change gate + transactional outbox). Each has its own CI workflow (`.github/workflows/`, merged 2026-08-04) plus a manifest-validation workflow.
 - `localstack/init/ready.d/` — LocalStack init hooks (recreates the tfstate bucket; community LocalStack is ephemeral).
-- App scaffold (Python/FastAPI: api + brain + worker services, shared pydantic models, `uv` layout) — **not started yet** (Track B: infra-first). DB schema design comes first, shaped by the calibration requirement.
+- **Still stubbed:** the Elo/Poisson engine (`handlers.py` logs `(stub)`), `commentary.py` (spec'd, not written), the predictions schema. The AI platform Tier 1 (Langfuse, eval harness) is designed, not deployed; gateway manifest exists with the two-provider config specified.
