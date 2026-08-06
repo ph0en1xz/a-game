@@ -1,9 +1,20 @@
 import asyncio
 
-import asyncpg
-import redis.asyncio as redis
+import asyncpg # type: ignore
+import redis.asyncio as redis # type: ignore
 
 from app.config import settings
+
+from openai import AsyncOpenAI # type: ignore
+
+
+def make_llm_client() -> AsyncOpenAI:
+    return AsyncOpenAI(
+        base_url=settings.litellm_url,
+        # LiteLLM has no master_key configured, so this is never checked.
+        api_key="sk-noop",
+        timeout=10.0,
+    )
 
 
 async def make_pg_pool() -> asyncpg.Pool:

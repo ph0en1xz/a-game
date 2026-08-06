@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.__version__ import version as __version__
 from app.consumer import run_consumer
-from app.stores import make_pg_pool, make_redis
+from app.stores import make_pg_pool, make_redis, make_llm_client
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("brain.main")
@@ -19,6 +19,7 @@ async def service_context(app: FastAPI):
     app.state.is_rabbitmq_ready = False
     app.state.pg_pool = await make_pg_pool()
     app.state.redis_client = await make_redis()
+    app.state.llm_client = make_llm_client()
 
     task = create_task(run_consumer(app.state))
     log.info("brain service started; consumer task launched")
@@ -34,6 +35,7 @@ async def service_context(app: FastAPI):
             pass
         await app.state.pg_pool.close()
         await app.state.redis_client.aclose()
+        await app.state.llm_client.close()
         log.info("brain service stopped")
 
 app = FastAPI(title="a-game-brain", version=__version__, lifespan=service_context)
