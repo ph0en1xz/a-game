@@ -2,17 +2,20 @@ import logging
 
 import asyncpg
 
+from app.db_model import Match
+
 log = logging.getLogger("brain.db")
 
 
-async def fetch_match_via_id(match_id: int, pool: asyncpg.Pool) -> asyncpg.Record | None:
-    # Columns named rather than SELECT *: blob holds the entire raw football-data
-    # payload and nothing downstream reads it.
+async def fetch_match_via_id(match_id: int, pool: asyncpg.Pool) -> Match | None:
     QUERY = """
-        SELECT id, season_id, home_team_id, away_team_id, matchday,
-               utc_date, status, home_goals, away_goals, fulltime_outcome
-        FROM a_game.match
-        WHERE id = $1
+        SELECT m.id, m.season_id, m.home_team_id, m.away_team_id, ht.name AS home_team, 
+        at.name AS away_team, m.matchday, m.utc_date, m.status, m.home_goals, m.away_goals, 
+        m.fulltime_outcome
+        FROM a_game.match AS m
+        INNER JOIN a_game.team AS ht ON m.home_team_id = ht.id
+        INNER JOIN a_game.team AS at ON m.away_team_id = at.id
+        WHERE m.id = $1
     """
 
     async with pool.acquire() as conn:
@@ -21,4 +24,4 @@ async def fetch_match_via_id(match_id: int, pool: asyncpg.Pool) -> asyncpg.Recor
     if row is None:
         log.warning("Match %d not found", match_id)
 
-    return row
+    return Match(**row) if row else None

@@ -1,4 +1,4 @@
-# Litellm - anthropic haiku model config
+# Litellm - anthropic haiku model config with openai 4o mini as a fallback
 apiVersion: v1
 kind: ConfigMap
 metadata:

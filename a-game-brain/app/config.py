@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     postgres_password: str
     postgres_db: str
 
+    litellm_host: str
+    litellm_port: int
+
+    @property
+    def litellm_url(self) -> str:
+        return f"http://{self.litellm_host}:{self.litellm_port}/v1"
+
     @property
     def amqp_url(self) -> str:
         return f"amqp://{self.rabbitmq_default_user}:{self.rabbitmq_default_pass}@{self.rabbitmq_host}:{self.rabbitmq_port}/"

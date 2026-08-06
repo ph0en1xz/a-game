@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 
-import aio_pika
+import aio_pika  # type: ignore
 
 from app.config import settings
 from app.handlers import process_job
@@ -44,7 +44,7 @@ async def run_consumer(state):
                 async with message.process():
                     match_id: int = json.loads(message.body)
                     log.info("Received match %d", match_id)
-                    await process_job(match_id, state.pg_pool, state.redis_client)
+                    await process_job(match_id, state.pg_pool, state.redis_client, state.llm_client)
     finally:
         await connection.close()
         state.is_rabbitmq_ready = False
