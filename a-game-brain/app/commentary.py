@@ -1,7 +1,7 @@
 import logging
 from textwrap import dedent
 
-from openai import AsyncOpenAI, OpenAIError # type: ignore
+from openai import AsyncOpenAI, OpenAIError  # type: ignore
 from pydantic import BaseModel, Field, ValidationError
 
 from app.db_model import Match

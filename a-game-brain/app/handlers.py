@@ -1,13 +1,11 @@
 import logging
 
+from asyncpg import Pool  # type: ignore
+from openai import AsyncOpenAI  # type: ignore
+from redis.asyncio import Redis  # type: ignore
+
 from app.commentary import Commentary, write_preview
-
-from asyncpg import Pool # type: ignore
-from redis.asyncio import Redis # type: ignore
-from openai import AsyncOpenAI # type: ignore
-
 from app.db import fetch_match_via_id
-
 
 log = logging.getLogger("brain.handlers")
 

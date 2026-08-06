@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.__version__ import version as __version__
 from app.consumer import run_consumer
-from app.stores import make_pg_pool, make_redis, make_llm_client
+from app.stores import make_llm_client, make_pg_pool, make_redis
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("brain.main")

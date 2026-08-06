@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 
-import aio_pika # type: ignore
+import aio_pika  # type: ignore
 
 from app.config import settings
 from app.handlers import process_job

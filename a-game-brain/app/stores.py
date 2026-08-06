@@ -1,11 +1,10 @@
 import asyncio
 
-import asyncpg # type: ignore
-import redis.asyncio as redis # type: ignore
+import asyncpg  # type: ignore
+import redis.asyncio as redis  # type: ignore
+from openai import AsyncOpenAI  # type: ignore
 
 from app.config import settings
-
-from openai import AsyncOpenAI # type: ignore
 
 
 def make_llm_client() -> AsyncOpenAI:
