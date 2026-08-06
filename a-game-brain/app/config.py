@@ -35,6 +35,11 @@ class Settings(BaseSettings):
         return f"amqp://{self.rabbitmq_default_user}:{self.rabbitmq_default_pass}@{self.rabbitmq_host}:{self.rabbitmq_port}/"
 
     @property
+    def amqp_display_url(self) -> str:
+        # amqp_url without the credentials - log this one, never amqp_url.
+        return f"amqp://{self.rabbitmq_host}:{self.rabbitmq_port}/"
+
+    @property
     def postgres_url(self) -> str:
         return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 

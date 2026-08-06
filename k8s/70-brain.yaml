@@ -45,6 +45,10 @@ spec:
             - { name: POSTGRES_PORT, value: "5432" }
             - { name: LITELLM_HOST, value: a-game-litellm }
             - { name: LITELLM_PORT, value: "4000" }
+          startupProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 5
+            failureThreshold: 12
           livenessProbe:
             httpGet: { path: /health, port: 8000 }
             initialDelaySeconds: 5
