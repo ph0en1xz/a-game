@@ -4,16 +4,19 @@
 > `docs/input-spec.md` §2 (core inputs), ADR 0005 (Postgres = system of record), and ADR 0007
 > (change-gated publish).
 
-**Status:** Draft v1 · **Last updated:** 2026-07-16 · **Engine:** PostgreSQL 16
+**Status:** Draft v2 · **Last updated:** 2026-08-07 · **Engine:** PostgreSQL 16
 
 ---
 
 ## 1. Scope
 
-Four tables covering the **ingestion** half of the pipeline: the match facts the worker
-upserts and the engine trains on. Predictions are **not** modelled here yet — ADR 0005 §2
-makes them a permanent, model-versioned record for calibration, and they arrive with the
-engine. They will FK to `match.id`.
+Six tables. Four cover the **ingestion** half — the match facts the worker upserts and the
+engine trains on. Two cover the **output** half: `prediction` (the engine's numbers) and
+`commentary` (the LLM's prose). Both FK to `match.id`.
+
+The output half is split in two deliberately. The engine and the LLM fail independently —
+LiteLLM can be down while the maths is fine — so one row holding both would have to either
+block on the model or store a lie. Their key shapes differ too, for the reason in §2.5.
 
 No ORM. `asyncpg` + hand-written SQL — the workload is one upsert with change detection and
 a set of analytical reads (window functions, time-decayed aggregates), which is where ORMs
@@ -94,6 +97,76 @@ deliberately **no** `competition_id` here (it would be a transitive dependency f
 | `blob` | `jsonb` | no | The raw match object. Insurance against the 10-req/min ceiling — backfill a new column from your own rows instead of re-fetching three seasons |
 | `ingested_at` | `timestamptz` | no | When this row was last written |
 
+### `prediction`
+
+The engine's output for one fixture under one parameter set. ADR 0005 §2 makes these
+permanent and model-versioned; ADR 0010 defines what the version means and §15–18 of it
+define how two versions get compared. Written by the brain, read by the API.
+
+Probabilities are **typed columns, not JSONB**. They are exactly what calibration buckets
+over and what `?min_edge=` filters on, and JSONB would give them no type check, no NOT NULL,
+no planner statistics, and an expression index on every calibration query. `numeric`, never
+`float` — a binary float cannot hold 0.1, so a sum-to-one constraint would fail on rows that
+are actually correct.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `bigint` | no | **PK.** `GENERATED ALWAYS AS IDENTITY` |
+| `match_id` | `bigint` | no | **FK → `match.id`** |
+| `engine_version` | `text` | no | The ADR 0010 parameter set that produced this row. Bumps on any parameter change, not just a formula change |
+| `elo_home` | `numeric(6,1)` | no | Home rating at kickoff, per ADR 0010 §6/§8 |
+| `elo_away` | `numeric(6,1)` | no | Away rating at kickoff |
+| `xg_home` | `numeric(4,2)` | no | Poisson λ for the home side |
+| `xg_away` | `numeric(4,2)` | no | Poisson λ for the away side |
+| `p_home` | `numeric(5,4)` | no | From the Poisson score matrix (ADR 0010 §12), not from Elo |
+| `p_draw` | `numeric(5,4)` | no | Falls out of the matrix — no three-outcome Elo variant needed |
+| `p_away` | `numeric(5,4)` | no | |
+| `p_over_2_5` | `numeric(5,4)` | no | |
+| `p_btts` | `numeric(5,4)` | no | |
+| `score_dist` | `jsonb` | no | `most_likely_scores` — nested, never filtered, so JSONB is the right side of the line |
+| `created_at` | `timestamptz` | no | `DEFAULT NOW()` |
+
+Constraints:
+
+- `UNIQUE (match_id, engine_version)` — the business key, and the `ON CONFLICT` target.
+- `CHECK` each probability is in `[0,1]`, and `abs(p_home + p_draw + p_away - 1) < 0.001`.
+  Tolerance rather than equality, because rounding to four places need not land on exactly 1.
+- No separate index on `match_id`: the UNIQUE builds a btree on `(match_id, engine_version)`
+  and a composite index already serves a leading-column lookup.
+
+**`hfa` is not stored.** The API payload reports it (`api-spec.md` §5), but it is a constant
+of `engine_version` — a transitive dependency free to drift if copied onto every row. Resolve
+it from the version's config at read time.
+
+### `commentary`
+
+The LLM's preview for one fixture. Applied 2026-08-07 (originally as `a_game.prediction`;
+renamed the same day, before any rows or readers existed — a table called `prediction`
+holding one prose column would have misled every reader once the table above landed). DDL:
+`a-game-worker/postgres/07_commentary.sql`.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `id` | `bigint` | no | **PK.** `GENERATED ALWAYS AS IDENTITY` |
+| `match_id` | `bigint` | no | **FK → `match.id`.** `UNIQUE` — one current preview per fixture |
+| `model_name` | `text` | no | The LiteLLM gateway alias (`claude-haiku`), i.e. the route, not the resolved provider model |
+| `prediction` | `text` | no | The preview. 40–600 chars, enforced by the `Commentary` pydantic model |
+| `created_at` | `timestamptz` | no | `DEFAULT NOW()` |
+
+Prompt and cost are deliberately absent — they belong to Langfuse (ADR 0008 T1), and storing
+the prompt would duplicate a constant system prompt onto every row.
+
+### 2.5 Why the two output tables key differently
+
+`commentary` is unique on `match_id` alone: one current preview per fixture, overwritten on
+recompute. `prediction` is unique on `(match_id, engine_version)`: calibration needs the same
+fixture scored by v3 and v4 side by side, which is the entire point of ADR 0005 §2.
+
+Both upsert within their key rather than appending. That means the *trajectory* of a
+prediction — how the numbers moved as kickoff approached — is not kept. Acceptable while
+`betting` is null; revisit if value bets ever need the prediction as of the moment a price
+was taken.
+
 ## 3. Change detection (ADR 0007 §3)
 
 The worker publishes "data ready" **only** when an upsert changes state. The columns that
@@ -139,7 +212,7 @@ Publish "data ready" once at the end, only if any phase-2 upsert changed rows (�
 
 | Not modelled | Why |
 |---|---|
-| `predictions` | Product-critical (ADR 0005 §2) but nothing writes it yet. FKs to `match.id` when the engine lands |
+| `team_rating` | Elo state per team+competition. ADR 0010 §21 leaves it open — ~1,140 matches recompute instantly, so the question is only whether rating *history* is wanted |
 | `standings` | Reconstructable from `match` rows. Earns a table only if HFA tuning wants an independent check |
 | `scorers`, players/squads | Player data feeds nothing in v1 — Elo and Poisson are team-level. `input-spec.md` §9's v2 injury weighting is the first real consumer |
 | `lastUpdated` | See §3 |
@@ -153,8 +226,14 @@ Publish "data ready" once at the end, only if any phase-2 upsert changed rows (�
    models) once a change lands against a populated table.
 2. **Enum vs CHECK vs lookup** for `status`, `duration`, `fulltime_outcome`. CHECK to start —
    `ALTER TYPE` is a migration and these sets are small and closed.
-3. **Indexes.** None yet, deliberately. The daily worker is a PK upsert; the engine reads
-   `(season_id, utc_date)` windows. Add when a query proves the need, not before.
+3. **Indexes.** None on the ingestion tables, deliberately — the daily worker is a PK upsert
+   and the engine reads `(season_id, utc_date)` windows. Add when a query proves the need.
+   The output tables' only indexes are the ones their UNIQUE constraints build.
+4. **The `prediction` table DDL** (§2) — specified above, not yet written as a numbered
+   `.sql` file or applied. (The `prediction` → `commentary` rename is done, 2026-08-07.)
+5. **Backtest storage.** ADR 0010 §15–18 needs Brier and log loss per `engine_version` over a
+   held-out season. Computable from `prediction` joined to `match` — decide whether the
+   scores get their own table or stay a query.
 
 ## Related
 
@@ -162,3 +241,4 @@ Publish "data ready" once at the end, only if any phase-2 upsert changed rows (�
 - `docs/api-spec.md` — the contract these rows are read through
 - ADR 0005 — Postgres as system of record
 - ADR 0007 — daily cadence, change-gated publish
+- ADR 0010 — engine parameters, `engine_version` semantics, and the evaluation gate

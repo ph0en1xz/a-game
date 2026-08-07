@@ -88,10 +88,10 @@ spec:
               mountPath: /etc/litellm
               readOnly: true
           args: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
-          # startupProbe:
-          #   httpGet: { path: /health/liveness, port: 4000 }
-          #   periodSeconds: 5
-          #   failureThreshold: 36
+          startupProbe:
+            httpGet: { path: /health/liveness, port: 4000 }
+            periodSeconds: 5
+            failureThreshold: 36
           livenessProbe:
             httpGet: { path: /health/liveness, port: 4000 }
             timeoutSeconds: 3

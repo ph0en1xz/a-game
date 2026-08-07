@@ -20,7 +20,7 @@ async def run_consumer(state):
     while True:
         try:
             connection = await aio_pika.connect_robust(settings.amqp_url)
-            log.info("Connected to RabbitMQ at %s", settings.amqp_url)
+            log.info("Connected to RabbitMQ at %s", settings.amqp_display_url)
             break
         except Exception as e:
             log.error(f"Error connecting to RabbitMQ: {e}. Retrying in 5 seconds...")
@@ -32,7 +32,7 @@ async def run_consumer(state):
             await asyncio.sleep(5)
 
     state.is_rabbitmq_ready = True
-    log.info("RabbitMQ consumer is ready and connected to %s", settings.amqp_url)
+    log.info("RabbitMQ consumer is ready and connected to %s", settings.amqp_display_url)
 
     try:
         channel = await connection.channel()
