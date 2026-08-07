@@ -162,16 +162,32 @@ Deferred to v2: it is the hardest input to do well, data quality is patchy, and 
 
 ---
 
-## 10. Design decisions to pin before coding
+## 10. Design decisions — locked in ADR 0010
 
-| # | Decision | Recommendation |
+**All six are decided. `docs/adr/0010-prediction-engine-parameters.md` is authoritative;**
+this table is the summary. Section references below point into that ADR.
+
+| # | Decision | Decided | ADR § |
+|---|---|---|---|
+| 1 | Training window (how many past seasons) | 3 seasons (~1,140 PL matches) — matches the ADR 0007 §4 backfill | §4 |
+| 2 | Leagues at launch | Premier League only; widen to the 12 free comps once the chain is validated end to end | §1 |
+| 3 | Decay half-life (how fast old matches lose weight) | ~6 months, on the Poisson goal data — **not** the Elo dial, which is K (§6) | §5, §7 |
+| 4 | Cold-start (promoted teams / new signings) | League average minus a small penalty. No exception for the second-division champion — it washes out inside ~6 matches | §9 |
+| 5 | Cross-league play (Champions League shared Elo scale) | Out of scope. Two reasons, not one: league Elo scales aren't comparable, **and** a single team rating doesn't hold across competitions (rotation, priority, setup) | §3 |
+| 6 | Min sample before trusting a team's strength | 5–6 matches; lean on the prior and blend below that | §10 |
+
+Four decisions this list missed, also settled in ADR 0010 — the engine could not be written
+without them:
+
+| Decision | Decided | ADR § |
 |---|---|---|
-| 1 | Training window (how many past seasons) | 3 seasons |
-| 2 | Leagues at launch | Start with Premier League only, validate full chain, then widen to the 12 free comps |
-| 3 | Decay half-life (how fast old matches lose weight) | ~6 months |
-| 4 | Cold-start (promoted teams / new signings) | Seed at league-average minus a small penalty |
-| 5 | Cross-league play (Champions League shared Elo scale) | Elo handles natively; Poisson needs care — defer CL to after single-league works |
-| 6 | Min sample before trusting a team's strength | ~5-6 matches into a season; lean on prior before that |
+| Elo K-factor | 20, scaled by goal difference, damped at the top end | §6 |
+| Home advantage | Fixed +70 Elo to the home side; fitted from data later | §8 |
+| Elo ↔ Poisson relationship | Elo does **not** feed Poisson. Two parallel models: Elo is rating state, Poisson produces the probabilities | §11–12, §14 |
+| Draw probabilities | From the Poisson score matrix, so no three-outcome Elo variant is needed | §12 |
+
+How a change to any of these is judged — Brier/log loss, the three baselines a version must
+beat, and the walk-forward backtest — is ADR 0010 §15–18.
 
 ---
 

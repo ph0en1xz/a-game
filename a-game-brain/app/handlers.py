@@ -34,6 +34,7 @@ async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI
         await redis.set("brain:last_match", match_id, ex=SEVEN_DAYS)
 
         preview = await write_preview(match, client)
+        
         if preview is None:
             log.warning("no preview for match %d", match_id)
         else:

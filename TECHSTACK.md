@@ -81,6 +81,11 @@
 
 ## Decisions
 See `docs/adr/` for decisions, `docs/input-spec.md` for engine detail, `docs/api-spec.md` (v2) for the API contract, `docs/schema.md` for the database schema, `docs/system-design/` for the diagram.
+- ✅ **Prediction engine** — PL only at launch; ratings keyed by team+competition; 3-season
+  window, 6-month decay, K=20 with damped GD scaling, +70 HFA, promoted teams seed at league
+  average − penalty, 5–6 match min sample; probabilities come from the Poisson matrix, Elo is
+  rating state + cross-check; Brier/log-loss gate on walk-forward backtest vs fixed baselines;
+  CL, congestion, and player ratings deferred. **ADR 0010**, 2026-08-07.
 - ✅ **Local validation split** — EKS Terraform stays plan-only (LocalStack Community has no EKS); Kubernetes learning runs on local k3s via k3d. **ADR 0009**, 2026-07-28.
 - ✅ **AI platform layer** — LiteLLM gateway, self-hosted Langfuse, CI eval gate (Tier 1); pgvector RAG + Argo (Tier 2); GPU serving doc-only (Tier 3). **ADR 0008**, 2026-07-22, amended 2026-07-30 (Langfuse is six components; Tier 1 runs before the infra track), 2026-08-04 (second provider + fallback chain), and 2026-08-05 (evals become the flagship; model-comparison report; tool-using agent; self-hosted CPU-scale model route; AI threat model; non-goals fixed).
 - ✅ **Ingestion cadence** — daily at 06:00 UTC; "data ready" published only when the upsert changed rows; 3-season backfill is a one-off bootstrap. **ADR 0007**, 2026-07-16 (amends ADR 0005's 6h cadence).
@@ -93,7 +98,8 @@ See `docs/adr/` for decisions, `docs/input-spec.md` for engine detail, `docs/api
 
 ### Still open
 1. **Database schema — ingestion half drafted** (`docs/schema.md`, 2026-07-16): `team`, `competition`, `season`, `match`. **Predictions still unmodelled** — shaped by the calibration requirement (permanent, model-versioned — ADR 0005) and designed with the engine. Also open: migration tooling (numbered `.sql` first, Alembic later — no ORM), enum-vs-CHECK, indexes.
-2. **6 engine design decisions** (training window, launch league, decay half-life, cold-start, cross-league, min sample) — recommendations in `docs/input-spec.md`, not locked.
+2. ~~6 engine design decisions~~ — **locked in ADR 0010** (2026-08-07), along with four more
+   the original list missed: K-factor, home advantage, Elo↔Poisson relationship, draw source.
 3. **Prod Postgres host** — RDS vs external. Decide before prod IaC.
 4. **Final prod-deployment decision** — deferred until the app is ready (EKS vs serverless vs other).
 5. **Scaffolding** — not yet started (Track B: infra-first).
