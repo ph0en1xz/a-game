@@ -1,11 +1,120 @@
 import logging
 from datetime import date
 
-import asyncpg
+import asyncpg  # type: ignore
 
 from app.model import Match
 
 log = logging.getLogger("worker.db")
+
+
+async def sync_historic_matches(pool: asyncpg.Pool, matches: list[Match]) -> int:
+    """Sync historic matches from past seasons to the database, creating any missing competitions,
+    seasons, and teams.  Returns the number of matches that were changed (inserted or updated)
+    in the database."""
+
+    SEASON_QUERY = """
+        INSERT INTO a_game.season (id, competition_id, start_date, end_date)
+        VALUES ($1, $2, $3, $4) 
+        ON CONFLICT (id) DO NOTHING
+    """
+
+    TEAMS_QUERY = """
+        INSERT INTO a_game.team (id, name, shortname, tla, emblem)
+        VALUES ($1, $2, $3, $4, $5) 
+        ON CONFLICT (id) DO
+        UPDATE SET
+            name      = excluded.name,
+            shortname = excluded.shortname,
+            tla       = excluded.tla,
+            emblem    = excluded.emblem
+    """
+
+    QUERY = """
+        INSERT INTO a_game.match (
+            id, season_id, home_team_id, away_team_id,
+            matchday, utc_date, status, duration,
+            home_goals, away_goals, home_goals_ht, away_goals_ht,
+            referee_name, blob
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
+        ON CONFLICT (id) DO
+        UPDATE SET
+            season_id     = excluded.season_id,
+            home_team_id  = excluded.home_team_id,
+            away_team_id  = excluded.away_team_id,
+            matchday      = excluded.matchday,
+            utc_date      = excluded.utc_date,
+            status        = excluded.status,
+            duration      = excluded.duration,
+            home_goals    = excluded.home_goals,
+            away_goals    = excluded.away_goals,
+            home_goals_ht = excluded.home_goals_ht,
+            away_goals_ht = excluded.away_goals_ht,
+            referee_name  = excluded.referee_name,
+            blob          = excluded.blob,
+            ingested_at   = NOW()
+        WHERE match.status        IS DISTINCT FROM excluded.status
+           OR match.utc_date      IS DISTINCT FROM excluded.utc_date
+           OR match.home_goals    IS DISTINCT FROM excluded.home_goals
+           OR match.away_goals    IS DISTINCT FROM excluded.away_goals
+           OR match.home_goals_ht IS DISTINCT FROM excluded.home_goals_ht
+           OR match.away_goals_ht IS DISTINCT FROM excluded.away_goals_ht
+        RETURNING id
+    """
+
+    changed = 0
+    async with pool.acquire() as conn, conn.transaction():
+        for match in matches:
+            # If there are referees, take the first one's name; otherwise, set to None.
+            if match.referees:
+                referee_name = match.referees[0].name
+            else: referee_name = None
+            match_json = match.model_dump_json()
+
+            await conn.execute(
+                SEASON_QUERY,
+                match.season.id,
+                match.competition.id,
+                match.season.startDate,
+                match.season.endDate,
+            )
+            for team in (match.homeTeam, match.awayTeam):
+                await conn.execute(
+                    TEAMS_QUERY,
+                    team.id,
+                    team.name,
+                    team.shortName,
+                    team.tla,
+                    team.crest,
+                )
+
+            row = await conn.fetchrow(
+                QUERY,
+                match.id,
+                match.season.id,
+                match.homeTeam.id,
+                match.awayTeam.id,
+                match.matchday,
+                match.utcDate,
+                match.status,
+                match.score.duration,
+                match.score.fullTime.home,
+                match.score.fullTime.away,
+                match.score.halfTime.home,
+                match.score.halfTime.away,
+                referee_name,
+                match_json,
+            )
+
+            if row is not None:
+                log.info("Synced match ID %s: %s vs %s on %s",
+                            match.id, match.homeTeam.name, match.awayTeam.name, match.utcDate)
+            else: changed += 1
+
+    log.info("Synced %d matches", changed)
+    return changed
+
 
 async def fetch_rabbit_events(pool: asyncpg.Pool) -> list[asyncpg.Record]:
     """Pending outbox events, oldest first. Empty list when there is nothing to publish."""

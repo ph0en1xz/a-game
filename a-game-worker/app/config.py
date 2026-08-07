@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     sports_api_url:str
     sports_competitions_matches_endpoint:str
     sports_competitions_endpoint:str
+    sports_historic_matches_endpoint:str
+
+    @property
+    def historic_matches_endpoint(self) -> str:
+        return f"{self.sports_api_url}/{self.sports_historic_matches_endpoint}"
 
     @property
     def competitions_endpoint(self) -> str:

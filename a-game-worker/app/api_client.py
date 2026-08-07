@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import logging
 
-import httpx
+import httpx  # type: ignore
 
 from app.config import settings
 from app.model import Match
@@ -22,8 +22,7 @@ def make_client() -> httpx.AsyncClient:
   )
 
 
-async def _get(client: httpx.AsyncClient, path: str, params: dict | None = None,
-               attempts: int = 3) -> httpx.Response:
+async def _get(client: httpx.AsyncClient, path: str, params: dict | None = None, attempts: int = 3) -> httpx.Response:
   """GET with retry. Retries transport errors and 5xx/429; a 4xx that isn't 429 is
   permanent (bad token, wrong path) — retrying it just burns rate limit."""
   for attempt in range(1, attempts + 1):
@@ -48,6 +47,40 @@ async def _get(client: httpx.AsyncClient, path: str, params: dict | None = None,
       await asyncio.sleep(3)
 
   raise AssertionError("unreachable")
+
+
+seasons = [datetime.datetime.now(datetime.UTC).year - (i + 1) for i in range(4)]
+
+async def get_historic_matches(client: httpx.AsyncClient, league_codes: list[str]) -> list[Match] | None:
+  """Fetches historic match data from the API for the past 4 seasons.
+  Returns a list of Match objects."""
+
+  matches: list[Match] = []
+  for season in seasons:
+    log.info("Fetching historic match data for season %d/%d...", season, season + 1)
+    params = {"season": season}
+    try:
+      for league_code in league_codes:
+        url = settings.sports_historic_matches_endpoint.format(
+          league_name=league_code,
+          season=season)
+        resp = await _get(client, url, params=params)
+        payload = resp.json()["matches"]
+        log.info("Fetched %d matches for season %d/%d for league %s", len(payload), season, season + 1, league_code)
+
+        for match_data in payload:
+          match = Match.model_validate(match_data)
+          matches.append(match)
+
+    except Exception:
+      log.exception("Error fetching historic matches for season %d", season)
+      break
+
+  if matches is None or len(matches) == 0:
+    log.warning("No historic matches fetched.")
+    return None
+
+  return matches
 
 
 async def get_all_competitions(client: httpx.AsyncClient) -> list[dict]:

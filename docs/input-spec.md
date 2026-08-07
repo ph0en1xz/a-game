@@ -3,7 +3,7 @@
 > The design contract the prediction engine is built against.
 > Everything here is powered by the **football-data.org** free tier **except odds** (external feed).
 
-**Status:** Draft v1 · **Last updated:** 2026-07-07
+**Status:** Draft v1 · **Last updated:** 2026-08-07
 
 ---
 
@@ -169,7 +169,7 @@ this table is the summary. Section references below point into that ADR.
 
 | # | Decision | Decided | ADR § |
 |---|---|---|---|
-| 1 | Training window (how many past seasons) | 3 seasons (~1,140 PL matches) — matches the ADR 0007 §4 backfill | §4 |
+| 1 | Training window (how many past seasons) | 3 seasons (1,140 PL matches, confirmed by the 2026-08-07 backfill) — matches the ADR 0007 §4 backfill, and is also the free tier's ceiling | §4 |
 | 2 | Leagues at launch | Premier League only; widen to the 12 free comps once the chain is validated end to end | §1 |
 | 3 | Decay half-life (how fast old matches lose weight) | ~6 months, on the Poisson goal data — **not** the Elo dial, which is K (§6) | §5, §7 |
 | 4 | Cold-start (promoted teams / new signings) | League average minus a small penalty. No exception for the second-division champion — it washes out inside ~6 matches | §9 |
@@ -188,6 +188,11 @@ without them:
 
 How a change to any of these is judged — Brier/log loss, the three baselines a version must
 beat, and the walk-forward backtest — is ADR 0010 §15–18.
+
+**Amended 2026-08-07.** The free tier serves three seasons, not four: `season=2022` returns
+403. §17's held-out season is therefore quarantined from *tuning* rather than from training —
+develop against walk-forward on 2024/25 (2023/24 as Elo warm-up), accept against 2025/26.
+See ADR 0010 Amendments.
 
 ---
 
