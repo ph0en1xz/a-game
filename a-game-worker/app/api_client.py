@@ -49,7 +49,7 @@ async def _get(client: httpx.AsyncClient, path: str, params: dict | None = None,
   raise AssertionError("unreachable")
 
 
-seasons = [datetime.datetime.now().year - (i + 1) for i in range(4)]
+seasons = [datetime.datetime.now(datetime.UTC).year - (i + 1) for i in range(4)]
 
 async def get_historic_matches(client: httpx.AsyncClient, league_codes: list[str]) -> list[Match] | None:
   """Fetches historic match data from the API for the past 4 seasons.
@@ -72,8 +72,8 @@ async def get_historic_matches(client: httpx.AsyncClient, league_codes: list[str
           match = Match.model_validate(match_data)
           matches.append(match)
 
-    except Exception as e:
-      log.error("Error fetching historic matches for season %d: %s", season, e)
+    except Exception:
+      log.exception("Error fetching historic matches for season %d", season)
       break
 
   if matches is None or len(matches) == 0:

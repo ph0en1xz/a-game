@@ -32,8 +32,8 @@ async def main():
         if records:
             log.info("Synced %d historic matches", records)
 
-    except Exception as e:
-        log.error("Error occurred while fetching historic matches: %s", e)
+    except Exception:
+        log.exception("Error occurred while fetching historic matches")
 
     finally:
         await client.aclose()

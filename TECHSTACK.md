@@ -61,7 +61,7 @@
 - **AWS.** Local dev fully emulated via **LocalStack** (AWS APIs, $0).
 
 ## External integrations
-- **football-data.org API (free tier)** — matches, standings, scorers, teams, persons. Covers all prediction/analytics inputs (endpoints enumerated in `docs/input-spec.md` §2–5).
+- **football-data.org API (free tier)** — matches, standings, scorers, teams, persons. Covers all prediction/analytics inputs (endpoints enumerated in `docs/input-spec.md` §2–5). **Historical depth is three seasons** — measured 2026-08-07, undocumented by the vendor; a fourth returns 403. Whether that window rolls is unknown, so ingested history is the only copy (ADR 0010 Amendments).
 - **Odds feed** (paid) — required for value bets; `betting` is `null` until wired.
 - **Injury source** (v2, external API/scrape) — deferred.
 
@@ -85,7 +85,9 @@ See `docs/adr/` for decisions, `docs/input-spec.md` for engine detail, `docs/api
   window, 6-month decay, K=20 with damped GD scaling, +70 HFA, promoted teams seed at league
   average − penalty, 5–6 match min sample; probabilities come from the Poisson matrix, Elo is
   rating state + cross-check; Brier/log-loss gate on walk-forward backtest vs fixed baselines;
-  CL, congestion, and player ratings deferred. **ADR 0010**, 2026-08-07.
+  CL, congestion, and player ratings deferred. **ADR 0010**, 2026-08-07, amended 2026-08-07
+  (the free tier serves only three seasons — `season=2022` is a 403 — so the backtest's
+  held-out season becomes a *tuning*-quarantined one: develop on 2024/25, accept on 2025/26).
 - ✅ **Local validation split** — EKS Terraform stays plan-only (LocalStack Community has no EKS); Kubernetes learning runs on local k3s via k3d. **ADR 0009**, 2026-07-28.
 - ✅ **AI platform layer** — LiteLLM gateway, self-hosted Langfuse, CI eval gate (Tier 1); pgvector RAG + Argo (Tier 2); GPU serving doc-only (Tier 3). **ADR 0008**, 2026-07-22, amended 2026-07-30 (Langfuse is six components; Tier 1 runs before the infra track), 2026-08-04 (second provider + fallback chain), and 2026-08-05 (evals become the flagship; model-comparison report; tool-using agent; self-hosted CPU-scale model route; AI threat model; non-goals fixed).
 - ✅ **Ingestion cadence** — daily at 06:00 UTC; "data ready" published only when the upsert changed rows; 3-season backfill is a one-off bootstrap. **ADR 0007**, 2026-07-16 (amends ADR 0005's 6h cadence).

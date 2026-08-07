@@ -1,6 +1,6 @@
 # ADR 0010 — Prediction engine: scope, parameters, and model shape
 
-- **Status:** Accepted (§11–14 confirmed 2026-08-07)
+- **Status:** Accepted (§11–14 confirmed 2026-08-07; amended 2026-08-07 — see Amendments)
 - **Date:** 2026-08-07
 - **Related:** ADR 0005 (Postgres as the prediction record, rows keyed by fixture + model
   version), ADR 0007 (daily change-gated cadence), ADR 0008 (AI layer phrases the numbers,
@@ -158,3 +158,73 @@ reach further back than the training window itself.
 **Neutral.** Elo's role is narrower than the original design implied: rating state and
 cold-start handling rather than the probability engine. It stays in the payload and stays
 worth maintaining, but §12 means the 1X2 numbers do not depend on it.
+
+## Amendments
+
+### 2026-08-07 — Only three seasons are reachable, so §17's held-out season is redefined
+
+Running the backfill established the real ceiling. On a free key, `/competitions/PL/matches`
+returns 380 matches each for `season=2025`, `2024` and `2023`; `season=2022` returns
+
+```
+403 {"message":"The resource you are looking for is restricted and apparently not within
+your permissions. Please check your subscription.","errorCode":403}
+```
+
+403 rather than 404 — the data exists and the plan will not serve it. §4 above and ADR 0007
+§4 both assumed three seasons were obtainable *and* that a fourth could be held out beyond
+them. Only the first is true.
+
+**The boundary is undocumented.** football-data's pricing, coverage and v4 documentation
+pages state competitions and rate limits but say nothing about historical depth, and the
+only third-party claim found (a competing vendor's comparison post) says the free tier is
+current-season-only — contradicted by the 1,140 matches actually retrieved. The measurement
+is therefore the authority here, and whether the limit is a rolling three-season window or a
+fixed cutoff date could not be determined. Both were consistent with the single observation.
+
+**§4 stands.** The training window remains three seasons. That is what the live engine reads
+when it rates a team and estimates a goal rate, and three is now also the maximum
+obtainable, so there is no trade-off left to make.
+
+**§17 changes.** A season outside the training window cannot be bought, so the protection it
+was buying is bought differently — by quarantining a season from *tuning* rather than from
+*training*:
+
+- **Development scoring** — walk-forward over 2024/25, with 2023/24 as the Elo warm-up.
+  This is the number consulted while tuning K (§6), HFA (§8), the half-life (§5), or
+  anything else.
+- **Acceptance scoring** — walk-forward over 2025/26, run once per candidate
+  `engine_version` at merge time and never during tuning. §16's three baselines are judged
+  on this number.
+
+The walk-forward protocol itself is unchanged and still mandatory: at any matchday, state is
+built strictly from matches before it, so neither set leaks. The reason a quarantined season
+still matters is §16's third baseline — "beat the previous `engine_version`". Iterating
+parameters against a score is fitting, even done by hand, and a score you have tuned against
+stops being an estimate of future performance. Acceptance scoring keeps one honest number in
+reserve.
+
+**Data capture is now load-bearing.** If the limit turns out to be a rolling window, 2023/24
+stops being fetchable during 2027 and the backfilled rows become unreproducible; if it is a
+fixed cutoff, the corpus simply widens by a season each year and §17's original form becomes
+affordable again. The conservative assumption costs almost nothing, so take it: what is in
+Postgres is the only copy. That makes the Postgres volume a backup target rather than a
+rebuildable cache — recorded here as a consequence, not as a solved problem. See Follow-ups.
+
+**Rejected for now:** paying for a wider history, or adding a second source such as
+football-data.co.uk's season CSVs. Both remain real options, and the second is free.
+Deferred rather than dismissed — the engine does not exist yet, so there is no evidence the
+two-season development set is too thin.
+
+**Known weakness.** It is thin. One season of development scoring with one season of Elo
+warm-up is a noisy signal, and if ratings need longer than a season to stabilise, tuning
+against that number is partly tuning against noise. This is tolerable only because nothing
+in the engine is fitted — every parameter in §5–§10 comes from convention and would only be
+nudged — but it is the weakest part of this amendment and should be revisited as soon as a
+fourth season exists.
+
+**Follow-ups.**
+- Back up the Postgres volume (or export the `match` blobs) before the corpus can be lost.
+  No mechanism currently exists.
+- Re-test `season=2022` after 2027-08 to settle rolling vs fixed. A 200 means fixed and the
+  window is widening; a continued 403 means rolling and the backup is load-bearing.
