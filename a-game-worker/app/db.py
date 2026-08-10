@@ -107,10 +107,13 @@ async def sync_historic_matches(pool: asyncpg.Pool, matches: list[Match]) -> int
                 match_json,
             )
 
+            # A returned row means the change gate matched and RETURNING fired,
+            # i.e. this upsert actually wrote something. No row means the record
+            # was already current. Same contract as sync_matches_per_competition.
             if row is not None:
+                changed += 1
                 log.info("Synced match ID %s: %s vs %s on %s",
                             match.id, match.homeTeam.name, match.awayTeam.name, match.utcDate)
-            else: changed += 1
 
     log.info("Synced %d matches", changed)
     return changed

@@ -4,7 +4,7 @@
 > `docs/input-spec.md` §2 (core inputs), ADR 0005 (Postgres = system of record), and ADR 0007
 > (change-gated publish).
 
-**Status:** Draft v2 · **Last updated:** 2026-08-07 · **Engine:** PostgreSQL 16
+**Status:** Draft v3 · **Last updated:** 2026-08-10 · **Engine:** PostgreSQL 16
 
 ---
 
@@ -44,7 +44,8 @@ Seeded by `GET /v4/competitions` — step 1 of every daily run, one call, return
 competitions on the free tier with their `currentSeason` block (which seeds `season` too).
 Idempotent, so there is no separate bootstrap step; a wiped database self-heals on the next
 run. The `competition` object embedded in each match payload keeps the row fresh as a
-by-product. Backs `GET /v1/leagues` (`api-spec.md` §6).
+by-product. Its `code` column is the `{league}` path param; the `GET /v1/leagues` discovery
+endpoint it was to back is deferred (api-spec v3, 2026-08-10).
 
 | Column | Type | Null | Notes |
 |---|---|---|---|
@@ -101,36 +102,42 @@ deliberately **no** `competition_id` here (it would be a transitive dependency f
 
 The engine's output for one fixture under one parameter set. ADR 0005 §2 makes these
 permanent and model-versioned; ADR 0010 defines what the version means and §15–18 of it
-define how two versions get compared. Written by the brain, read by the API.
+define how two versions get compared. Written by the brain. **Not read by the API** — the
+2026-08-10 contract change (`api-spec.md` v3) keeps the raw numbers out of the client
+payload; this table serves calibration and the backtest.
+
+**Applied 2026-08-10** — DDL in `a-game-worker/postgres/08_prediction.sql`, applied by hand
+to the running database (init scripts don't re-run against an existing PVC).
 
 Probabilities are **typed columns, not JSONB**. They are exactly what calibration buckets
-over and what `?min_edge=` filters on, and JSONB would give them no type check, no NOT NULL,
-no planner statistics, and an expression index on every calibration query. `numeric`, never
-`float` — a binary float cannot hold 0.1, so a sum-to-one constraint would fail on rows that
-are actually correct.
+over, and JSONB would give them no type check, no NOT NULL, no planner statistics, and an
+expression index on every calibration query. `numeric`, never `float` — a binary float
+cannot hold 0.1, so a sum-to-one constraint would fail on rows that are actually correct.
 
 | Column | Type | Null | Notes |
 |---|---|---|---|
 | `id` | `bigint` | no | **PK.** `GENERATED ALWAYS AS IDENTITY` |
 | `match_id` | `bigint` | no | **FK → `match.id`** |
-| `engine_version` | `text` | no | The ADR 0010 parameter set that produced this row. Bumps on any parameter change, not just a formula change |
-| `elo_home` | `numeric(6,1)` | no | Home rating at kickoff, per ADR 0010 §6/§8 |
-| `elo_away` | `numeric(6,1)` | no | Away rating at kickoff |
-| `xg_home` | `numeric(4,2)` | no | Poisson λ for the home side |
-| `xg_away` | `numeric(4,2)` | no | Poisson λ for the away side |
-| `p_home` | `numeric(5,4)` | no | From the Poisson score matrix (ADR 0010 §12), not from Elo |
-| `p_draw` | `numeric(5,4)` | no | Falls out of the matrix — no three-outcome Elo variant needed |
-| `p_away` | `numeric(5,4)` | no | |
-| `p_over_2_5` | `numeric(5,4)` | no | |
-| `p_btts` | `numeric(5,4)` | no | |
-| `score_dist` | `jsonb` | no | `most_likely_scores` — nested, never filtered, so JSONB is the right side of the line |
-| `created_at` | `timestamptz` | no | `DEFAULT NOW()` |
+| `engine_version` | `text` | no | The ADR 0010 parameter set that produced this row (`app/engine/params.py`). Bumps on any parameter change, not just a formula change |
+| `prob_home` | `numeric(5,4)` | no | From the Poisson score matrix (ADR 0010 §12), not from Elo |
+| `prob_draw` | `numeric(5,4)` | no | Falls out of the matrix — no three-outcome Elo variant needed |
+| `prob_away` | `numeric(5,4)` | no | |
+| `over_2_5` | `numeric(5,4)` | no | |
+| `btts` | `numeric(5,4)` | no | |
+| `lambda_home` | `numeric(6,4)` | no | Poisson λ for the home side. The two λs regenerate the whole score matrix, so a new market (correct score, over 1.5, …) is derivable later without replaying the engine |
+| `lambda_away` | `numeric(6,4)` | no | |
+| `most_likely_scores` | `jsonb` | no | `[{"home": 1, "away": 1, "prob": 0.1123}, …]` — a list, nested, never filtered |
+| `elo_home` | `numeric(7,2)` | no | Rating at kickoff, straight from `RatingSnapshot` — context and cross-check (ADR 0010 §14), never a probability source |
+| `elo_away` | `numeric(7,2)` | no | |
+| `computed_at` | `timestamptz` | no | `DEFAULT NOW()`, refreshed on upsert |
 
 Constraints:
 
 - `UNIQUE (match_id, engine_version)` — the business key, and the `ON CONFLICT` target.
-- `CHECK` each probability is in `[0,1]`, and `abs(p_home + p_draw + p_away - 1) < 0.001`.
-  Tolerance rather than equality, because rounding to four places need not land on exactly 1.
+- `CHECK` each probability is in `[0,1]`, and `ABS(prob_home + prob_draw + prob_away - 1) <=
+  0.0005`. Tolerance rather than equality, because rounding to four places need not land on
+  exactly 1 — the writer rounds to column scale before insert so the CHECK applies to the
+  stored values.
 - No separate index on `match_id`: the UNIQUE builds a btree on `(match_id, engine_version)`
   and a composite index already serves a leading-column lookup.
 
@@ -149,9 +156,15 @@ holding one prose column would have misled every reader once the table above lan
 |---|---|---|---|
 | `id` | `bigint` | no | **PK.** `GENERATED ALWAYS AS IDENTITY` |
 | `match_id` | `bigint` | no | **FK → `match.id`.** `UNIQUE` — one current preview per fixture |
-| `model_name` | `text` | no | The LiteLLM gateway alias (`claude-haiku`), i.e. the route, not the resolved provider model |
+| `source_model` | `text` | no | The **resolved provider model** (`anthropic/claude-haiku-4-5-…`), read from the gateway's `x-litellm-model-name` response header — not the alias, so a fallback to the secondary provider is recorded honestly. (Renamed from `model_name` and re-pointed 2026-08-10 — the alias told you nothing when the fallback fired) |
 | `prediction` | `text` | no | The preview. 40–600 chars, enforced by the `Commentary` pydantic model |
+| `suggested_bet` | `text` | no | `DEFAULT ''`. The market where the model departs most from the league baseline — **in either direction**: a divergence signal, not a tip (decided 2026-08-10). Validated against the engine's market list in code, deliberately not by a CHECK — the list will grow, and a CHECK turns adding a market into a migration |
+| `suggested_bet_reason` | `text` | no | `DEFAULT ''`. One sentence citing the model percentage and the baseline, ≤200 chars enforced in code |
 | `created_at` | `timestamptz` | no | `DEFAULT NOW()` |
+| `updated_at` | `timestamptz` | no | `DEFAULT NOW()`, refreshed by the upsert's `DO UPDATE` |
+
+The two `suggested_bet` columns were added 2026-08-10 as an idempotent `ALTER` in
+`07_commentary.sql` and applied by hand to the running database.
 
 Prompt and cost are deliberately absent — they belong to Langfuse (ADR 0008 T1), and storing
 the prompt would duplicate a constant system prompt onto every row.
@@ -229,8 +242,9 @@ Publish "data ready" once at the end, only if any phase-2 upsert changed rows (�
 3. **Indexes.** None on the ingestion tables, deliberately — the daily worker is a PK upsert
    and the engine reads `(season_id, utc_date)` windows. Add when a query proves the need.
    The output tables' only indexes are the ones their UNIQUE constraints build.
-4. **The `prediction` table DDL** (§2) — specified above, not yet written as a numbered
-   `.sql` file or applied. (The `prediction` → `commentary` rename is done, 2026-08-07.)
+4. ~~The `prediction` table DDL~~ — **done 2026-08-10**: written as
+   `08_prediction.sql` and applied to the running database. (The `prediction` →
+   `commentary` rename was done 2026-08-07.)
 5. **Backtest storage.** ADR 0010 §15–18 needs Brier and log loss per `engine_version` over a
    held-out season. Computable from `prediction` joined to `match` — decide whether the
    scores get their own table or stay a query.

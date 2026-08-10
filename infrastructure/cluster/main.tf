@@ -32,6 +32,42 @@ resource "aws_eks_node_group" "node_group_config" {
   instance_types = ["t3.small"]
 }
 
+# The VPC CNI ships with NetworkPolicy enforcement OFF. Without this addon block
+# every policy in k8s/50-networkpolicies.yaml applies cleanly, shows up in
+# `kubectl get netpol`, and blocks nothing - the API server stores the object,
+# but enforcement is the CNI's job and it simply declines to do it. There is no
+# warning and no error. The namespace's default-deny silently becomes allow-all.
+#
+# k3d does not have this problem because it runs kube-router, which enforces via
+# iptables. That difference is invisible until you move to EKS.
+#
+# Requires VPC CNI >= 1.14 (addon_version left unset = the default for the
+# cluster version, which on 1.32 is well past that) and the node role's
+# AmazonEKS_CNI_Policy, already attached below.
+#
+# Verify after apply - do not infer it from the object existing:
+#   kubectl run probe --image=busybox -n a-game --rm -it -- wget -qO- a-game-postgres:5432
+# It must fail. If it connects, enforcement is off.
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name = aws_eks_cluster.cluster.name
+  addon_name   = "vpc-cni"
+
+  # Strings, not booleans - the addon's config schema types these as strings and
+  # a real bool is rejected.
+  configuration_values = jsonencode({
+    enableNetworkPolicy = "true"
+  })
+
+  # The addon is preinstalled by EKS, so the first apply is always a conflict
+  # with a config Terraform did not write. OVERWRITE makes this layer the owner.
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  # Nodes first: the agent this enables is a DaemonSet and has nowhere to land
+  # until at least one node has joined.
+  depends_on = [aws_eks_node_group.node_group_config]
+}
+
 resource "aws_iam_role" "node" {
   name = "eks-node-a-game"
   assume_role_policy = jsonencode({

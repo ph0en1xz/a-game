@@ -11,7 +11,7 @@
 
 ## Product surface
 - **API-only SaaS — no frontend in v1** (ADR 0003; Next.js browser client is Phase 2).
-- **Four read-only `GET` endpoints** (ADR 0005): leagues list, league fixtures, league weekly suggestions, team suggestions. Full contract in `docs/api-spec.md` (v2).
+- **One client endpoint** (decided 2026-08-10, amending ADR 0005's four-endpoint set): `GET /v1/leagues/{league}/teams/{team}/suggestions` — resolves the team's next fixture in that league and returns the **commentary only** (preview prose + suggested bet + reason); the raw engine numbers stay in Postgres for calibration. Read path: Redis (`prediction:{match_id}`, TTL expires at kickoff) → Postgres → 404, never generation-on-request. The other three v2 endpoints are deferred. Full contract in `docs/api-spec.md` (v3).
 - **Auth: static API keys** (`Authorization: Bearer`), stored hashed in Postgres, per-key rate limits. No auth endpoint.
 
 ## Runtime & language
@@ -69,6 +69,7 @@
 - **Local-first, $0 build:** the entire stack runs on the laptop (k3s + LocalStack + containers). **No AWS spend until deliberate go-live.**
 - **Secrets never hardcoded** — local `.env` (gitignored) in dev, AWS Secrets Manager in cloud. Claude API key server-side only.
 - Free football API covers everything except **odds** and **shot-level xG** (both paid).
+- **NetworkPolicy enforcement is a CNI property, not a Kubernetes one.** k3d runs kube-router and enforces; the EKS VPC CNI ships with enforcement **off**, so `k8s/50-networkpolicies.yaml` would apply cleanly and block nothing — no warning, default-deny silently becomes allow-all. `enableNetworkPolicy = "true"` is set on the `vpc-cni` addon in `infrastructure/cluster/main.tf` (needs VPC CNI ≥ 1.14). **Verify after any EKS apply with a connection that must fail — never infer it from the object existing.**
 
 ## Key local-dev commands (finalize at scaffold)
 - Local cluster: `k3d cluster create a-game`
@@ -92,7 +93,7 @@ See `docs/adr/` for decisions, `docs/input-spec.md` for engine detail, `docs/api
 - ✅ **AI platform layer** — LiteLLM gateway, self-hosted Langfuse, CI eval gate (Tier 1); pgvector RAG + Argo (Tier 2); GPU serving doc-only (Tier 3). **ADR 0008**, 2026-07-22, amended 2026-07-30 (Langfuse is six components; Tier 1 runs before the infra track), 2026-08-04 (second provider + fallback chain), and 2026-08-05 (evals become the flagship; model-comparison report; tool-using agent; self-hosted CPU-scale model route; AI threat model; non-goals fixed).
 - ✅ **Ingestion cadence** — daily at 06:00 UTC; "data ready" published only when the upsert changed rows; 3-season backfill is a one-off bootstrap. **ADR 0007**, 2026-07-16 (amends ADR 0005's 6h cadence).
 - ✅ **CI/CD** — GitHub Actions (CI + Terraform via OIDC); local `kubectl apply`; GitOps (Argo CD) deferred to EKS/prod phase. **ADR 0006**, 2026-07-10.
-- ✅ **v1 service architecture** — precompute pipeline; Postgres = prediction record; RabbitMQ single broker (learning); Redis cache-only; API keys; WS → Phase 2. **ADR 0005**, 2026-07-09 (amends ADR 0003's endpoint set).
+- ✅ **v1 service architecture** — precompute pipeline; Postgres = prediction record; RabbitMQ single broker (learning); Redis cache-only; API keys; WS → Phase 2. **ADR 0005**, 2026-07-09 (amends ADR 0003's endpoint set), amended 2026-08-10 (endpoint set reduced to the single team-suggestions endpoint, commentary-only payload — api-spec v3).
 - ✅ **Language: Python** (FastAPI/pydantic/uv). **ADR 0004**, 2026-07-09 (supersedes ADR 0001's Node/TS).
 - ✅ **Product surface** — API-only SaaS, no v1 frontend. **ADR 0003**, 2026-07-09 (endpoint set since amended by 0005).
 - ✅ **Prod execution model** — EKS as the learning prod target; final prod deferred. **ADR 0002**, 2026-07-08 (supersedes ADR 0001's serverless call).

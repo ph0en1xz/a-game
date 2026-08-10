@@ -58,13 +58,12 @@ async def get_historic_matches(client: httpx.AsyncClient, league_codes: list[str
   matches: list[Match] = []
   for season in seasons:
     log.info("Fetching historic match data for season %d/%d...", season, season + 1)
-    params = {"season": season}
     try:
       for league_code in league_codes:
         url = settings.sports_historic_matches_endpoint.format(
           league_name=league_code,
           season=season)
-        resp = await _get(client, url, params=params)
+        resp = await _get(client, url)
         payload = resp.json()["matches"]
         log.info("Fetched %d matches for season %d/%d for league %s", len(payload), season, season + 1, league_code)
 
@@ -98,12 +97,12 @@ async def get_matches_per_competition(league_codes: list[str], client: httpx.Asy
   """Returns upcoming matches per competition — the response is an envelope
   {"count": 13, "resultSet": {...}, "competition: {...}", "matches": [...]}."""
   
-  today = datetime.datetime.now(datetime.UTC).date()
-  one_week = today + datetime.timedelta(days=7)
+  now = datetime.datetime.now(datetime.UTC)
+  season_start = now.year if now.month >= 7 else now.year - 1
+
   params = {
-    "status": "SCHEDULED",
-    "dateFrom": today.isoformat(),
-    "dateTo": one_week.isoformat(),
+      "status": "SCHEDULED",
+      "season": season_start,
   }
 
   matches: list[Match] = []

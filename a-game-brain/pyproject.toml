@@ -13,6 +13,31 @@ dependencies = [
     "uvicorn[standard]>=0.51.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    # TestClient for the FastAPI health/readiness routes.
+    "httpx>=0.28",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"
+
+[tool.coverage.run]
+omit = ["app/__version__.py"]
+
+[tool.coverage.report]
+exclude_also = [
+    'if __name__ == .__main__.:',
+    'raise AssertionError\("unreachable"\)',
+]
+
 [tool.mypy]
 plugins = ["pydantic.mypy"]
 
