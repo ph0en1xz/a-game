@@ -57,3 +57,14 @@ TTL'd cache — **no prediction history**, making model accuracy/calibration unm
 - **Neutral:** the Kubernetes learning surface is preserved — Deployments (api, calc),
   CronJob (ingestion), StatefulSets (RabbitMQ, Redis, Postgres), plus broker and cache
   operations.
+
+## Amendments
+
+- **2026-08-10 — Endpoint set reduced to one.** Decision 7's four endpoints become a single
+  client entrypoint: `GET /v1/leagues/{league}/teams/{team}/suggestions`. The other three are
+  deferred, not deleted. The response is the **commentary only** (preview prose +
+  `suggested_bet` + reason) — the raw engine numbers stay in Postgres for calibration and are
+  not part of the client contract. Read path: resolve team+league to the next fixture, then
+  Redis (`prediction:{match_id}`, TTL expiring at kickoff, commentary only) → Postgres →
+  `404`; never generation-on-request, per this ADR's original reasoning. Contract:
+  `docs/api-spec.md` v3. Decisions 1–6 are untouched.

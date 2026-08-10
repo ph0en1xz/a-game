@@ -39,6 +39,7 @@ spec:
                   - { name: SPORTS_API_URL, value: "https://api.football-data.org/v4" }
                   - { name: SPORTS_COMPETITIONS_ENDPOINT, value: "competitions" }
                   - { name: SPORTS_COMPETITIONS_MATCHES_ENDPOINT, value: "competitions/{code}/matches" }
+                  - { name: SPORTS_HISTORIC_MATCHES_ENDPOINT, value: "competitions/{league_name}/matches?season={season}&status=FINISHED" }
               envFrom:
                 - secretRef:
                     { name: db-credentials }
