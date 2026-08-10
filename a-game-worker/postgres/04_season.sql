@@ -1,4 +1,4 @@
-CREATE TABLE a_game.season (
+CREATE TABLE IF NOT EXISTS a_game.season (
     id             BIGINT PRIMARY KEY,
     competition_id BIGINT NOT NULL REFERENCES a_game.competition(id),
     start_date     DATE   NOT NULL,
