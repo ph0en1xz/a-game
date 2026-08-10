@@ -8,6 +8,9 @@ class Match(BaseModel):
 
     id: int
     season_id: int
+    # Joined in from season. The engine keys ratings and strengths by
+    # competition (ADR 0010 §2), so the fixture has to carry it too.
+    competition_id: int
     home_team_id: int
     away_team_id: int
     home_team: str

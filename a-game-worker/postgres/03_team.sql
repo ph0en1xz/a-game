@@ -1,4 +1,4 @@
-CREATE TABLE a_game.team (
+CREATE TABLE IF NOT EXISTS a_game.team (
     id        BIGINT PRIMARY KEY,
     name      TEXT   NOT NULL,
     shortname TEXT,

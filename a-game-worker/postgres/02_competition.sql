@@ -1,4 +1,4 @@
-CREATE TABLE a_game.competition (
+CREATE TABLE IF NOT EXISTS a_game.competition (
     id      BIGINT  PRIMARY KEY,
     name    TEXT    NOT NULL,
     code    TEXT    NOT NULL UNIQUE,          -- 'PL' — the {league} path param

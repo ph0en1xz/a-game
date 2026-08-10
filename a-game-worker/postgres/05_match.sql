@@ -1,4 +1,4 @@
-CREATE TABLE a_game.match (
+CREATE TABLE IF NOT EXISTS a_game.match (
     id               BIGINT      PRIMARY KEY,
     season_id        BIGINT      NOT NULL REFERENCES a_game.season(id),
     home_team_id     BIGINT      NOT NULL REFERENCES a_game.team(id),
