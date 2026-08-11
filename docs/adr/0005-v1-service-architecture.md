@@ -65,6 +65,28 @@ TTL'd cache — **no prediction history**, making model accuracy/calibration unm
   deferred, not deleted. The response is the **commentary only** (preview prose +
   `suggested_bet` + reason) — the raw engine numbers stay in Postgres for calibration and are
   not part of the client contract. Read path: resolve team+league to the next fixture, then
-  Redis (`prediction:{match_id}`, TTL expiring at kickoff, commentary only) → Postgres →
+  Redis (`match_id:{match_id}`, TTL running to the next ingestion run, commentary only) → Postgres →
   `404`; never generation-on-request, per this ADR's original reasoning. Contract:
   `docs/api-spec.md` v3. Decisions 1–6 are untouched.
+- **2026-08-11 — API keys move out of Postgres; rate limits are no longer per key; both are
+  deferred until after the EKS deployment.** Decision 5 said keys live in Postgres with a
+  per-key limit. There is one key and one caller, so it lives as a SHA-256 hash in a Kubernetes
+  Secret instead, compared with `hmac.compare_digest`; revocation is rotating the Secret. Rate
+  limiting becomes a flat Redis fixed window — 10 requests per 2 seconds. A key table earns its
+  place only with several keys to tell apart, or revocation without a redeploy; revisit then,
+  along with per-key limits.
+
+  **Neither is built yet.** Both wait until the EKS deployment is done, so the API ships
+  unauthenticated in the meantime — tolerable only while the sole deployment is local k3d with
+  no public Ingress, and a **release gate** for anything reachable from outside a laptop. Note
+  the sequencing risk: ADR 0009 keeps the EKS Terraform plan-only, so this gate depends on work
+  that is not yet scheduled. Spec: `docs/api-spec.md` §2.
+- **2026-08-11 — the endpoint becomes a match id lookup.** The 2026-08-10 amendment above
+  named `GET /v1/leagues/{league}/teams/{team}/suggestions`; it is now `GET /{match_id}`,
+  returning `{description, match_id}`. The server no longer resolves league → competition,
+  team → club, or club → next fixture, so `league_not_found`, `team_not_found` and
+  `no_upcoming_fixture` describe conditions that cannot occur and are dropped; one `404`
+  (`suggestion_not_ready`) remains. The caller is now responsible for knowing the fixture id,
+  which is a real narrowing of the product surface ADR 0003 described — recorded as such
+  rather than as a simplification. Team resolution is deferred, not deleted. Contract:
+  `docs/api-spec.md` v4.

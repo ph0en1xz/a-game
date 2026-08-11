@@ -29,6 +29,18 @@ spec:
           ports:
             - name: http
               containerPort: 8000
+          envFrom:
+            - secretRef:
+                { name: db-credentials }         # POSTGRES_USER/PASSWORD/DB
+          env:
+            - { name: REDIS_HOST, value: a-game-redis }
+            - { name: REDIS_PORT, value: "6379" }
+            - { name: POSTGRES_HOST, value: a-game-postgres }
+            - { name: POSTGRES_PORT, value: "5432" }
+          startupProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 5
+            failureThreshold: 12
           livenessProbe:
             httpGet: { path: /health, port: 8000 }
             initialDelaySeconds: 5

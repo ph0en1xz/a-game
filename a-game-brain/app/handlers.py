@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from asyncpg import Pool  # type: ignore
 from openai import AsyncOpenAI  # type: ignore
 from redis.asyncio import Redis  # type: ignore
+from redis.exceptions import RedisError  # type: ignore
 
 from app.commentary import Commentary, write_preview
 from app.db import (
@@ -17,7 +18,7 @@ from app.engine.params import ENGINE_VERSION
 
 log = logging.getLogger("brain.handlers")
 
-SEVEN_DAYS = 604800
+CACHE_TTL_SECONDS = 86400
 
 async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI) -> Commentary | None:
     """Process one "match changed" event from the queue.
@@ -38,8 +39,6 @@ async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI
         match = await fetch_match_via_id(match_id, pg)
         if match is None:
             return match
-
-        await redis.set("brain:last_match", match_id, ex=SEVEN_DAYS)
 
         # The training step. Nothing is persisted between runs - both models are
         # rebuilt from the match history every time, which takes milliseconds at
@@ -67,8 +66,14 @@ async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI
         # One transaction: a fixture never ends up with prose and no numbers.
         async with pg.acquire() as conn, conn.transaction():
             await store_prediction(
-                conn, match.id, ENGINE_VERSION, probabilities, elo_home, elo_away
+               conn, 
+               match.id, 
+               ENGINE_VERSION,
+               probabilities, 
+               elo_home, 
+               elo_away
             )
+
             if preview is not None:
                 await store_commentary(
                     conn,
@@ -78,6 +83,16 @@ async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI
                     preview.suggested_bet,
                     preview.suggested_bet_reason,
                 )
+
+        if preview is not None:
+            try:
+                await redis.set(
+                    f"match_id:{match_id}",
+                    preview.text,
+                    ex=CACHE_TTL_SECONDS
+                )
+            except RedisError:
+                log.warning("could not warm the cache for match %d", match_id, exc_info=True)
 
         log.info(
             "processed match %d (status=%s): %.2f/%.2f/%.2f, lambdas %.2f/%.2f",

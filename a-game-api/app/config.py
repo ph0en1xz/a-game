@@ -9,6 +9,19 @@ class Settings(BaseSettings):
     redis_host: str
     redis_port: int
 
+    postgres_user: str
+    postgres_password: str
+    postgres_host: str
+    postgres_port: int
+    postgres_db: str
+
     @property
     def redis_url(self) -> str:
         return f"redis://{self.redis_host}:{self.redis_port}"
+
+    @property
+    def postgres_url(self) -> str:
+        credentials = f"{self.postgres_user}:{self.postgres_password}"
+        return f"postgresql://{credentials}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+
+settings = Settings()

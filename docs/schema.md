@@ -4,7 +4,7 @@
 > `docs/input-spec.md` §2 (core inputs), ADR 0005 (Postgres = system of record), and ADR 0007
 > (change-gated publish).
 
-**Status:** Draft v3 · **Last updated:** 2026-08-10 · **Engine:** PostgreSQL 16
+**Status:** Draft v3 · **Last updated:** 2026-08-11 · **Engine:** PostgreSQL 16
 
 ---
 
@@ -13,6 +13,10 @@
 Six tables. Four cover the **ingestion** half — the match facts the worker upserts and the
 engine trains on. Two cover the **output** half: `prediction` (the engine's numbers) and
 `commentary` (the LLM's prose). Both FK to `match.id`.
+
+Nothing here models API keys. The single key's hash lives in a Kubernetes Secret
+(`api-spec.md` §2, decided 2026-08-11) — a table only earns its place with several keys to
+tell apart or revocation without a redeploy.
 
 The output half is split in two deliberately. The engine and the LLM fail independently —
 LiteLLM can be down while the maths is fine — so one row holding both would have to either
@@ -44,8 +48,9 @@ Seeded by `GET /v4/competitions` — step 1 of every daily run, one call, return
 competitions on the free tier with their `currentSeason` block (which seeds `season` too).
 Idempotent, so there is no separate bootstrap step; a wiped database self-heals on the next
 run. The `competition` object embedded in each match payload keeps the row fresh as a
-by-product. Its `code` column is the `{league}` path param; the `GET /v1/leagues` discovery
-endpoint it was to back is deferred (api-spec v3, 2026-08-10).
+by-product. Its `code` column no longer appears in any request — the API is keyed by match id
+as of api-spec v4 (2026-08-11), so neither the `{league}` path param nor the `GET /v1/leagues`
+discovery endpoint exists. `code` still drives which competitions the worker fetches.
 
 | Column | Type | Null | Notes |
 |---|---|---|---|

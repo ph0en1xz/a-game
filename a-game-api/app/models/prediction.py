@@ -2,5 +2,5 @@ from pydantic import BaseModel
 
 
 class Prediction(BaseModel):
-    description:str
-    match:str
+    description: str
+    match_id: int
