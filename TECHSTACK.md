@@ -5,13 +5,13 @@
 **Project:** A-Game — football statistics, predictions (Elo + Poisson), AI-generated match previews, and value-bet suggestions, delivered as an API-only SaaS on football-data.org data.
 **Owner:** Mario (Nexoro Tech)
 **Repo:** ~/repos/a-game (WSL2 Ubuntu, canonical; Windows-side copy deprecated)
-**Status:** Pre-build · Python stack (ADR 0004, 2026-07-09) · prod target = EKS for learning (ADR 0002); final prod deferred
+**Status:** API read path shipped and merged to `main` (PR #11, 2026-08-11) and verified on local k3d · Python stack (ADR 0004, 2026-07-09) · prod target = EKS for learning (ADR 0002), Terraform plan-only (ADR 0009); final prod deferred
 
 ---
 
 ## Product surface
 - **API-only SaaS — no frontend in v1** (ADR 0003; Next.js browser client is Phase 2).
-- **One client endpoint** (narrowed 2026-08-11): `GET /{match_id}` — the caller supplies football-data's match id and gets `{description, match_id}`, the preview prose and nothing else. No league/team resolution: that was v3's entrypoint and is now deferred, along with the three 404 codes that belonged to it. Suggested bet, source model, timestamps and the raw engine numbers all stay in Postgres. Read path: Redis (`match_id:{match_id}`, TTL runs to the next 06:00 UTC ingestion run) → Postgres → 404, never generation-on-request. Full contract in `docs/api-spec.md` (v4).
+- **One client endpoint** (narrowed 2026-08-11): `GET /{match_id}` — the caller supplies football-data's match id and gets `{description, match_id}`, the preview prose and nothing else. No league/team resolution: that was v3's entrypoint and is now deferred, along with the three 404 codes that belonged to it. Suggested bet, source model, timestamps and the raw engine numbers all stay in Postgres. Read path: Redis (`match_id:{match_id}`, value is the prose as a plain string, **flat 86400s TTL** — 24h ≈ one ingestion cycle) → Postgres → 404, never generation-on-request. `CACHE_TTL_SECONDS` is defined separately in `a-game-api/app/main.py` and `a-game-brain/app/handlers.py` and the two must stay equal; computing the exact seconds to the next 06:00 UTC run was considered and **rejected as over-engineering** (2026-08-11). Full contract in `docs/api-spec.md` (v4).
 - **Auth + rate limiting: specified, deferred until after the EKS deployment** (decided 2026-08-11). Design: one static API key (`Authorization: Bearer`), its SHA-256 hash in a Kubernetes Secret — **not** a database table; rate limiting a fixed Redis window, 10 requests per 2 seconds. No auth endpoint. **Until it ships the API is unauthenticated** — safe only while the sole deployment is local k3d with no public Ingress.
 
 ## Runtime & language
