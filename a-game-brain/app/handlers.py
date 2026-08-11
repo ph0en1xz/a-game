@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from asyncpg import Pool  # type: ignore
 from openai import AsyncOpenAI  # type: ignore
 from redis.asyncio import Redis  # type: ignore
-from redis.exceptions import RedisError  # type: ignore
 
 from app.commentary import Commentary, write_preview
 from app.db import (
