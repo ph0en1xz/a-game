@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from asyncpg import Pool  # type: ignore
 from openai import AsyncOpenAI  # type: ignore
 from redis.asyncio import Redis  # type: ignore
+from redis.exceptions import RedisError  # type: ignore
 
 from app.commentary import Commentary, write_preview
 from app.db import (
@@ -83,11 +84,15 @@ async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI
                     preview.suggested_bet_reason,
                 )
 
-        await redis.set(
-            f"match_id:{match_id}",
-            preview.text,
-            ex=CACHE_TTL_SECONDS
-        )
+        if preview is not None:
+            try:
+                await redis.set(
+                    f"match_id:{match_id}",
+                    preview.text,
+                    ex=CACHE_TTL_SECONDS
+                )
+            except RedisError:
+                log.warning("could not warm the cache for match %d", match_id, exc_info=True)
 
         log.info(
             "processed match %d (status=%s): %.2f/%.2f/%.2f, lambdas %.2f/%.2f",
