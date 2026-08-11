@@ -11,16 +11,19 @@ a dead consumer is a stalled queue.
 """
 
 import pytest
+from redis.exceptions import RedisError  # type: ignore
 
 from app import handlers
 from app.commentary import Commentary
 from app.engine.params import ENGINE_VERSION
 from tests.conftest import make_match, result
 
+PREVIEW_TEXT = "x" * 80
+
 
 def preview(**overrides) -> Commentary:
     base = {
-        "text": "x" * 80,
+        "text": PREVIEW_TEXT,
         "suggested_bet": "Over 2.5 goals",
         "suggested_bet_reason": "58% against a 52% baseline.",
         "source_model": "anthropic/claude-haiku-4-5-20251001",
@@ -129,13 +132,32 @@ async def test_the_history_is_scoped_to_the_fixtures_competition(
     assert captured["competition_id"] == 2021
 
 
-async def test_the_last_match_is_cached(wired, history, pool, fake_redis, llm_client):
+async def test_the_preview_is_warmed_into_the_cache(
+    wired, history, pool, fake_redis, llm_client
+):
+    """The key and the value the API reads back (api-spec §4): the prose as a
+    plain string under `match_id:{id}`, not a JSON object."""
     wired(match=make_match(), history=history)
 
     await handlers.process_job(538107, pool, fake_redis, llm_client)
 
-    assert fake_redis.store["brain:last_match"] == 538107
-    assert fake_redis.expiries["brain:last_match"] == handlers.SEVEN_DAYS
+    assert fake_redis.store["match_id:538107"] == PREVIEW_TEXT
+    assert fake_redis.expiries["match_id:538107"] == handlers.CACHE_TTL_SECONDS
+
+
+async def test_a_cache_failure_does_not_fail_the_job(
+    wired, history, pool, fake_redis, llm_client
+):
+    """The row is already committed by then. Letting a Redis blip raise would
+    log a job as failed after its work was durably written."""
+    wired(match=make_match(), history=history)
+
+    async def explode(*args, **kwargs):
+        raise RedisError("connection refused")
+
+    fake_redis.set = explode
+
+    assert await handlers.process_job(538107, pool, fake_redis, llm_client) is not None
 
 
 async def test_the_probabilities_reach_both_the_llm_and_the_writer(

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from asyncpg import Pool  # type: ignore
 from openai import AsyncOpenAI  # type: ignore
 from redis.asyncio import Redis  # type: ignore
+from redis.exceptions import RedisError  # type: ignore
 
 from app.commentary import Commentary, write_preview
 from app.db import (
@@ -17,7 +18,7 @@ from app.engine.params import ENGINE_VERSION
 
 log = logging.getLogger("brain.handlers")
 
-SEVEN_DAYS = 604800
+CACHE_TTL_SECONDS = 86400
 
 async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI) -> Commentary | None:
     """Process one "match changed" event from the queue.
@@ -82,11 +83,12 @@ async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI
                     preview.suggested_bet,
                     preview.suggested_bet_reason,
                 )
-                await redis.set(
-                    f"match_id:{match_id}", 
-                    preview.text, 
-                    ex=SEVEN_DAYS
-                )
+
+        await redis.set(
+            f"match_id:{match_id}",
+            preview.text,
+            ex=CACHE_TTL_SECONDS
+        )
 
         log.info(
             "processed match %d (status=%s): %.2f/%.2f/%.2f, lambdas %.2f/%.2f",
