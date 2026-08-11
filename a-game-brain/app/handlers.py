@@ -39,8 +39,6 @@ async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI
         if match is None:
             return match
 
-        await redis.set("brain:last_match", match_id, ex=SEVEN_DAYS)
-
         # The training step. Nothing is persisted between runs - both models are
         # rebuilt from the match history every time, which takes milliseconds at
         # three seasons and is always current by construction.
@@ -67,8 +65,14 @@ async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI
         # One transaction: a fixture never ends up with prose and no numbers.
         async with pg.acquire() as conn, conn.transaction():
             await store_prediction(
-                conn, match.id, ENGINE_VERSION, probabilities, elo_home, elo_away
+               conn, 
+               match.id, 
+               ENGINE_VERSION,
+               probabilities, 
+               elo_home, 
+               elo_away
             )
+
             if preview is not None:
                 await store_commentary(
                     conn,
@@ -77,6 +81,11 @@ async def process_job(match_id: int, pg: Pool, redis: Redis, client: AsyncOpenAI
                     preview.text,
                     preview.suggested_bet,
                     preview.suggested_bet_reason,
+                )
+                await redis.set(
+                    f"match_id:{match_id}", 
+                    preview.text, 
+                    ex=SEVEN_DAYS
                 )
 
         log.info(

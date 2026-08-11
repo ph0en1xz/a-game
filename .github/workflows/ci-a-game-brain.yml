@@ -43,12 +43,7 @@ jobs:
         run: uv run --with mypy mypy app
 
       - name: Tests
-        run: |
-          if [ -d tests ] || find . -maxdepth 2 -type f -name 'test*.py' | grep -q .; then
-            uv run --with pytest pytest -q
-          else
-            echo "No tests found for a-game-brain; skipping pytest."
-          fi
+        run: uv run pytest -q
 
       - name: Build Docker image
         run: docker build -t a-game-brain:test .

@@ -11,8 +11,8 @@
 
 ## Product surface
 - **API-only SaaS — no frontend in v1** (ADR 0003; Next.js browser client is Phase 2).
-- **One client endpoint** (decided 2026-08-10, amending ADR 0005's four-endpoint set): `GET /v1/leagues/{league}/teams/{team}/suggestions` — resolves the team's next fixture in that league and returns the **commentary only** (preview prose + suggested bet + reason); the raw engine numbers stay in Postgres for calibration. Read path: Redis (`prediction:{match_id}`, TTL expires at kickoff) → Postgres → 404, never generation-on-request. The other three v2 endpoints are deferred. Full contract in `docs/api-spec.md` (v3).
-- **Auth: static API keys** (`Authorization: Bearer`), stored hashed in Postgres, per-key rate limits. No auth endpoint.
+- **One client endpoint** (narrowed 2026-08-11): `GET /{match_id}` — the caller supplies football-data's match id and gets `{description, match_id}`, the preview prose and nothing else. No league/team resolution: that was v3's entrypoint and is now deferred, along with the three 404 codes that belonged to it. Suggested bet, source model, timestamps and the raw engine numbers all stay in Postgres. Read path: Redis (`match_id:{match_id}`, TTL runs to the next 06:00 UTC ingestion run) → Postgres → 404, never generation-on-request. Full contract in `docs/api-spec.md` (v4).
+- **Auth + rate limiting: specified, deferred until after the EKS deployment** (decided 2026-08-11). Design: one static API key (`Authorization: Bearer`), its SHA-256 hash in a Kubernetes Secret — **not** a database table; rate limiting a fixed Redis window, 10 requests per 2 seconds. No auth endpoint. **Until it ships the API is unauthenticated** — safe only while the sole deployment is local k3d with no public Ingress.
 
 ## Runtime & language
 - **Python 3.12+** (ADR 0004 — supersedes ADR 0001's Node/TS).
@@ -49,7 +49,8 @@
 - **Kubernetes — the compute model end to end:** **k3s** (via k3d) locally, **EKS** as the prod target. Deliberate: the priority is hands-on Kubernetes experience. Workloads: Deployments (api, brain), CronJob (worker), StatefulSets (RabbitMQ, Redis, Postgres).
 
 ## CI/CD (ADR 0006, 2026-07-10)
-- **GitHub Actions** — CI (ruff · mypy · pytest · Docker build) once app code exists; `terraform plan` / gated `apply` via **OIDC** (no static AWS keys).
+- **GitHub Actions** — CI (ruff · mypy · pytest · Docker build) once app code exists; `terraform plan` / gated `apply` via **OIDC** (no static AWS keys). One workflow per service, path-filtered.
+- **Coverage gate: 80%**, and it lives in each service's `pyproject.toml` (`addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"`), **not in the workflow**. Deliberate: `uv run pytest` on the laptop enforces exactly the bar CI does, so the gate can't be discovered only after a push. Present in `a-game-brain` and `a-game-worker`; **`a-game-api` has neither the gate nor the pytest dependency group yet** — add both when its tests land.
 - **Local deploys:** `kubectl apply` to k3d. **GitOps (Argo CD)** deferred to the EKS/prod phase (needs a persistent cluster to reconcile against).
 
 ## Prod execution model (ADR 0002, 2026-07-08 — supersedes ADR 0001)

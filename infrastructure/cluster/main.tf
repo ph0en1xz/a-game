@@ -48,6 +48,7 @@ resource "aws_eks_node_group" "node_group_config" {
 # Verify after apply - do not infer it from the object existing:
 #   kubectl run probe --image=busybox -n a-game --rm -it -- wget -qO- a-game-postgres:5432
 # It must fail. If it connects, enforcement is off.
+# Under test
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name = aws_eks_cluster.cluster.name
   addon_name   = "vpc-cni"
