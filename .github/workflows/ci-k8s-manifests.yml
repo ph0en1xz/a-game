@@ -26,6 +26,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Scan Kubernetes YAMLs
+        uses: stackrox/kube-linter-action@v1
+        with:
+          directory: k8s/
+
       # A throwaway API server is what makes this worth running. Offline schema
       # linters catch unknown fields, but `policyTypes: [Igress]` is a plain
       # string in the OpenAPI schema — only the real API server rejects it.
