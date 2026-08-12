@@ -16,7 +16,7 @@ Football statistics and predictions app built on the football-data.org API: Elo 
 - **Data source:** football-data.org free tier (matches, standings, scorers, teams, persons). Odds and shot-level xG are paid and out of v1 scope; injuries are v2.
 - **Engine:** Elo + Poisson, computed deterministically in code. The AI layer only phrases numbers — it never invents stats.
 - **Architecture (ADR 0005 — precompute, do not reopen):** worker CronJob (daily 06:00 UTC, ADR 0007) → Postgres upsert → RabbitMQ "data ready" job → brain recomputes ALL upcoming fixtures + Haiku narration → Postgres (permanent, model-versioned — calibration tracking) → warm Redis. The API does plain reads; no compute-on-request, no pending/polling states.
-- **Roles:** Postgres = only system of record · Redis = read-through cache — **no longer removable once Langfuse lands**: it becomes a trace queue too, on a dedicated `REDIS_DB` index (ADR 0008, 2026-07-30) · RabbitMQ = single broker, adopted as a learning target.
+- **Roles:** Postgres = only system of record · Redis = read-through cache — **no longer removable once Langfuse lands**: it becomes a trace queue too, on its own logical db index — db 1, set via Langfuse's Redis connection string (ADR 0008, 2026-07-30; corrected 2026-08-12 — there is no `REDIS_DB` variable) · RabbitMQ = single broker, adopted as a learning target.
 
 ## Environment
 - Local dev runs entirely on the laptop at **$0**: Docker + k3s (via k3d) + LocalStack (AWS emulation) + a Postgres container + Terraform pointed at LocalStack.

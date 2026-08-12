@@ -140,7 +140,7 @@ full engine stays in the app-correctness track.
 
 ### 2026-07-30 — Langfuse datastores: six components, not one (option C)
 
-Self-hosted Langfuse (v3, current) is not a single container. It requires:
+Self-hosted Langfuse (v4, current as of 2026-08-12) is not a single container. It requires:
 
 | Component | Role |
 |---|---|
@@ -159,7 +159,8 @@ jobs, and adopting pgvector does not reduce the Langfuse footprint.
 **Decision — option C: self-host, reusing existing stateful workloads where possible.**
 
 - **Reuse** the existing `a-game-postgres` StatefulSet (dedicated database + user for Langfuse).
-- **Reuse** the existing `a-game-redis` StatefulSet (dedicated `REDIS_DB` index).
+- **Reuse** the existing `a-game-redis` StatefulSet (dedicated logical db index — see the
+  correction below on how that is actually configured).
 - **Add** ClickHouse, MinIO, `langfuse-web`, `langfuse-worker` — four new workloads instead of six.
 
 Options rejected: **Langfuse Cloud** (zero infra, but the operational surface being demonstrated
@@ -182,6 +183,20 @@ ClickHouse alone wants ~2GB); **dropping Langfuse for LiteLLM's built-in Postgre
 **Positive side effect:** MinIO locally standing in for S3 on EKS mirrors the LocalStack
 substitution already in use for AWS APIs (ADR 0009), so the blob-storage dependency strengthens
 the local/prod portability story rather than adding a loose end.
+
+**Correction (2026-08-12), facts only — the decision is unchanged.** Re-checked against Langfuse's
+self-hosting docs and upstream `docker-compose.yml` while specifying the build:
+
+- The current self-hosted major is **v4**, not v3. The six-component table above still holds
+  exactly, so option C and both accepted costs survive the version bump untouched.
+- **There is no `REDIS_DB` environment variable.** Langfuse takes either
+  `REDIS_HOST`/`REDIS_PORT`/`REDIS_AUTH` or a single `REDIS_CONNECTION_STRING`. The dedicated index
+  this amendment calls for is therefore expressed as the db path on the connection string
+  (`redis://a-game-redis:6379/1`), not as a variable of its own. Cost 2 below is unaffected —
+  Langfuse still uses Redis as a queue, so Redis is still not removable.
+
+Implementation detail for both lives in the item 5 build sheet in
+`documentation/runbooks/a-game/2026-07-30-ai-platform-tier-1/runbook.md`.
 
 ### 2026-07-30 — sequencing changed: Tier 1 runs before the infra track finishes
 
