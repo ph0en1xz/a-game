@@ -26,16 +26,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-        # Replaces the breaking third-party action with a native, robust binary check
+      # Installs the raw binary directly via GitHub API redirections
       - name: Install and Run Kube-Linter
         run: |
           echo "Downloading official Kube-Linter binary..."
-          curl -L -s -o kube-linter.tar.gz https://github.com
-          tar -xzf kube-linter.tar.gz kube-linter
+          # Pulls the latest production release asset directly without archiving
+          curl -L -s -o kube-linter https://github.com
           chmod +x kube-linter
           
           echo "Scanning Kubernetes manifests..."
           ./kube-linter lint k8s/
+
 
       # A throwaway API server is what makes this worth running. Offline schema
       # linters catch unknown fields, but `policyTypes: [Igress]` is a plain
