@@ -26,16 +26,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      # Installs the raw binary directly via GitHub API redirections
-      - name: Install and Run Kube-Linter
+      # Uses the official Docker container to execute the static scan safely
+      - name: Run Kube-Linter via Docker
         run: |
-          echo "Downloading official Kube-Linter binary..."
-          # Pulls the latest production release asset directly without archiving
-          curl -L -s -o kube-linter https://github.com
-          chmod +x kube-linter
-          
           echo "Scanning Kubernetes manifests..."
-          ./kube-linter lint k8s/
+          docker run --rm \
+            -v ${{ github.workspace }}/k8s:/dir \
+            stackrox/kube-linter:latest \
+            lint /dir
 
 
       # A throwaway API server is what makes this worth running. Offline schema
