@@ -27,7 +27,7 @@ metadata:
     app.kubernetes.io/part-of: a-game
     app.kubernetes.io/name: a-game-rabbitmq
 spec:
-  serviceName: a-game-rabbitmq
+  serviceName: a-game-rabbitmq # used only for stateful sets
   replicas: 1
   selector:
     matchLabels:
