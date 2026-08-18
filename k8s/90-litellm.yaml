@@ -26,7 +26,7 @@ data:
       num_retries: 2
       request_timeout: 50
       fallbacks: [{"claude-haiku": ["gpt-4o-mini"]}]
-      success_callback: ["langfuse"]
+      success_callback: ["langfuse_otel"]
 ---
 # Litellm service
 apiVersion: v1
