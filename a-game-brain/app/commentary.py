@@ -66,12 +66,16 @@ SYSTEM_PROMPT = dedent("""
     Rules:
     - Use ONLY the facts and numbers given in the user message. Everything you
       know about these clubs from elsewhere is off limits - including the
-      stadium or city, rivalries, history, honours, form, league position,
-      injuries and transfers. If a detail is not in the user message, it does
-      not exist.
+      stadium or city, nicknames, rivalries, history, honours, form, league
+      position, injuries and transfers. Name each club only as the user message
+      names it: "Sheffield United", never "the Blades". If a detail is not in
+      the user message, it does not exist.
     - The percentages given are a statistical model's output. Quote them as
       given, never recompute or round them differently, and never invent a
-      number that is not in the list.
+      number that is not in the list. Do not combine, total or average them
+      either - two expected-goal figures are two figures, not one sum.
+    - Call them probabilities, never odds. Odds are a bookmaker's price and we
+      have none; "74% odds" is wrong and is the exact confusion to avoid.
     - Report them as probabilities, not certainties. "The model makes City
       slight favourites at 39%" is right; "City will win" is not.
     - Pick the one market where the model departs most from the league baseline
@@ -160,12 +164,15 @@ def _user_prompt(match: Match, probabilities: ScoreProbabilities) -> str:
         - Draw: {probabilities.prob_draw:.0%}
         - Away win: {probabilities.prob_away:.0%}
         - Over 2.5 goals: {probabilities.over_2_5:.0%}
+        - Under 2.5 goals: {1 - probabilities.over_2_5:.0%}
         - Both teams to score: {probabilities.btts:.0%}
+        - Both teams to score - no: {1 - probabilities.btts:.0%}
         - Expected goals: {probabilities.lambda_home:.2f} home, {probabilities.lambda_away:.2f} away
         - Most likely scorelines: {scores}
 
         League baselines for comparison: home win 45%, draw 27%, away win 28%,
-        over 2.5 goals 52%, both teams to score 48%.
+        over 2.5 goals 52%, under 2.5 goals 48%, both teams to score 48%,
+        both teams to score - no 52%.
     """).strip()
 
 

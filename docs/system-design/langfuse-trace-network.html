@@ -1,0 +1,516 @@
+<title>The Langfuse trace network</title>
+
+<style>
+  :root {
+    --ground:      #EEF1F3;
+    --surface:     #FFFFFF;
+    --surface-alt: #E6EBEE;
+    --ink:         #111A20;
+    --muted:       #5A6B76;
+    --line:        #C6D2D8;
+    --line-soft:   #DCE4E8;
+    --accent:      #0F7A85;
+    --accent-soft: #DCEEF0;
+    --signal:      #B0530C;
+    --signal-soft: #F6E7D8;
+    --ok:          #2E6F4E;
+    --ok-soft:     #E2EFE7;
+
+    --sans: ui-sans-serif, system-ui, "Segoe UI Variable Text", "Segoe UI", -apple-system, Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0D1418;
+      --surface:     #141E23;
+      --surface-alt: #1A252B;
+      --ink:         #DFE8ED;
+      --muted:       #8CA0AC;
+      --line:        #2B3A43;
+      --line-soft:   #223038;
+      --accent:      #45BFC9;
+      --accent-soft: #123037;
+      --signal:      #E5934A;
+      --signal-soft: #33241A;
+      --ok:          #5FA87F;
+      --ok-soft:     #16281F;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0D1418;
+    --surface:     #141E23;
+    --surface-alt: #1A252B;
+    --ink:         #DFE8ED;
+    --muted:       #8CA0AC;
+    --line:        #2B3A43;
+    --line-soft:   #223038;
+    --accent:      #45BFC9;
+    --accent-soft: #123037;
+    --signal:      #E5934A;
+    --signal-soft: #33241A;
+    --ok:          #5FA87F;
+    --ok-soft:     #16281F;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 52px;
+  }
+
+  .prose { max-width: 72ch; display: flex; flex-direction: column; gap: 14px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  h1 {
+    font-size: 38px;
+    line-height: 1.12;
+    letter-spacing: -0.022em;
+    font-weight: 660;
+    text-wrap: balance;
+    margin-top: 6px;
+  }
+
+  h2 {
+    font-size: 21px;
+    letter-spacing: -0.012em;
+    font-weight: 640;
+    text-wrap: balance;
+  }
+
+  .standfirst { font-size: 18px; color: var(--muted); max-width: 62ch; }
+
+  .rule { border: 0; border-top: 1px solid var(--line); }
+
+  section { display: flex; flex-direction: column; gap: 18px; }
+
+  .sec-head { display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+
+  p { max-width: 72ch; }
+  strong { font-weight: 640; }
+  code { font-family: var(--mono); font-size: 0.9em; background: var(--surface-alt); padding: 1px 5px; border-radius: 2px; }
+
+  /* --- deploy state, three reads: running / built / absent --- */
+  .state { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); }
+  .state > div { background: var(--surface); padding: 15px 17px; display: flex; flex-direction: column; gap: 7px; }
+  .state h3 { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .state h3::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .state .up h3 { color: var(--ok); }
+  .state .up h3::before { background: var(--ok); }
+  .state .held h3 { color: var(--signal); }
+  .state .held h3::before { background: var(--signal); }
+  .state .none h3 { color: var(--muted); }
+  .state .none h3::before { background: transparent; border: 1.5px solid var(--muted); }
+  .state ul { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+  .state li { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  .state .why { font-size: 13px; color: var(--muted); line-height: 1.45; }
+
+  /* --- component inventory --- */
+  .inv { display: grid; grid-template-columns: repeat(auto-fit, minmax(224px, 1fr)); gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); }
+  .inv > div { background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 3px; }
+  .inv .nm { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .inv .rl { font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+  .tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; align-self: flex-start; padding: 2px 6px; border-radius: 2px; margin-bottom: 3px; }
+  .tag.new { background: var(--accent-soft); color: var(--accent); }
+  .tag.reused { background: var(--surface-alt); color: var(--muted); }
+  .tag.once { background: var(--signal-soft); color: var(--signal); }
+
+  /* --- figures --- */
+  figure { display: flex; flex-direction: column; gap: 14px; margin: 0; }
+  .canvas { background: var(--surface); border: 1px solid var(--line); padding: 18px; overflow-x: auto; }
+  .canvas svg { display: block; min-width: 760px; width: 100%; height: auto; }
+  figcaption { font-size: 14px; color: var(--muted); max-width: 76ch; }
+
+  .steps { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 8px 26px; font-size: 13.5px; }
+  .steps li { display: flex; gap: 9px; align-items: baseline; }
+  .steps .n { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--accent); flex: 0 0 auto; }
+
+  /* --- svg node + edge styling, all token-driven so both themes resolve --- */
+  .n-box     { fill: var(--surface); stroke: var(--line); stroke-width: 1.4; }
+  .n-box.new { fill: var(--accent-soft); stroke: var(--accent); }
+  .n-box.ext { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .n-box.job { fill: var(--signal-soft); stroke: var(--signal); stroke-width: 1.4; stroke-dasharray: 5 3; }
+  .t-title   { font-family: var(--mono); font-size: 11.5px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+  .t-sub     { font-family: var(--mono); font-size: 9.5px; fill: var(--muted); text-anchor: middle; }
+  .t-edge    { font-family: var(--mono); font-size: 9.5px; fill: var(--muted); }
+  .t-ns      { font-family: var(--mono); font-size: 11px; fill: var(--muted); letter-spacing: 0.06em; }
+  .ns-box    { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 3 5; }
+  .e         { fill: none; stroke: var(--line); stroke-width: 1.5; }
+  .e.acc     { stroke: var(--accent); }
+  .e.hop     { stroke: var(--accent); stroke-width: 2.6; }
+  .e.sig     { stroke: var(--signal); stroke-width: 1.8; }
+  .e.once    { stroke: var(--signal); stroke-width: 1.4; stroke-dasharray: 5 4; }
+  .mk-n      { fill: var(--line); }
+  .mk-a      { fill: var(--accent); }
+  .mk-s      { fill: var(--signal); }
+  .badge     { fill: var(--accent); }
+  .badge-t   { font-family: var(--mono); font-size: 10px; font-weight: 700; fill: var(--surface); text-anchor: middle; }
+  .t-sig     { font-family: var(--mono); font-size: 9.5px; fill: var(--signal); }
+
+  /* --- table --- */
+  .tbl-frame { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  thead th { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--surface-alt); border-bottom: 1px solid var(--line); position: sticky; top: 0; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.mono { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.port { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.is-new td.mono { color: var(--accent); }
+  tr.is-job td.mono { color: var(--signal); }
+  .pol-new { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+  .pol-has { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .pol-job { font-family: var(--mono); font-size: 11px; color: var(--signal); }
+
+  .note { border-left: 2px solid var(--signal); padding: 2px 0 2px 16px; max-width: 72ch; display: flex; flex-direction: column; gap: 10px; }
+  .note.calm { border-left-color: var(--accent); }
+
+  ul.plain { list-style: none; display: flex; flex-direction: column; gap: 7px; max-width: 72ch; font-size: 15px; }
+  ul.plain li { display: flex; gap: 10px; }
+  ul.plain li::before { content: "—"; color: var(--muted); flex: 0 0 auto; }
+
+  a { color: var(--accent); }
+  a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+  @media (max-width: 640px) { h1 { font-size: 29px; } .wrap { padding: 36px 16px 64px; gap: 40px; } }
+</style>
+
+<div class="wrap">
+
+  <header class="prose">
+    <div class="eyebrow">a-game · ADR 0008 Tier 1 · item 5 · updated 2026-08-18</div>
+    <h1>The Langfuse trace network</h1>
+    <p class="standfirst">Seven components, five of them new. Every arrow runs from the component that <em>opens</em> the connection to the one that accepts it — the only direction NetworkPolicy can see, and not always the direction the data moves.</p>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <h2>What you deploy, what you already have</h2>
+      <p class="eyebrow">option C — reuse the app's stateful workloads</p>
+    </div>
+    <div class="inv">
+      <div><span class="tag reused">reused</span><span class="nm">a-game-postgres</span><span class="rl">Transactional side: your login, the org, the project, and the API keys LiteLLM authenticates with. A new <code>langfuse</code> database inside the existing StatefulSet — not a second pod.</span></div>
+      <div><span class="tag reused">reused</span><span class="nm">a-game-redis</span><span class="rl">Ingestion queue on logical db 1, beside the app's cache on db 0. This is what stops Redis being removable.</span></div>
+      <div><span class="tag once">one-shot</span><span class="nm">a-game-create-lang-db</span><span class="rl">A Job, not a script. Creates the <code>langfuse</code> role and database inside the existing Postgres, then deletes itself. Idempotent — re-running only rotates the role's password.</span></div>
+      <div><span class="tag new">new</span><span class="nm">langfuse-web</span><span class="rl">Two jobs in one pod: the ingestion API that LiteLLM posts to, and the UI you read traces in. Also the only container that runs headless init.</span></div>
+      <div><span class="tag new">new</span><span class="nm">langfuse-worker</span><span class="rl">Drains the queue and does the writing. Nothing ever connects to it.</span></div>
+      <div><span class="tag new">new</span><span class="nm">ClickHouse</span><span class="rl">Traces, observations, scores. Columnar, append-heavy, built for "p95 latency by model this week". Postgres cannot substitute for it.</span></div>
+      <div><span class="tag new">new</span><span class="nm">MinIO</span><span class="rl">Raw event bodies as blobs. Stands in for S3 the way LocalStack stands in for AWS.</span></div>
+    </div>
+    <div class="note calm">
+      <p><strong>Why the database arrives as a Job.</strong> A Job is a pod, so it reaches Postgres exactly the way api, brain and worker already do — over the network, with a Secret. An <code>exec</code> script would rely on the local socket's passwordless auth inside <code>a-game-postgres-0</code>, and neither the socket nor that pod exists once Postgres is RDS. On EKS only <code>PGHOST</code> changes.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>How a trace travels</h2>
+      <p class="eyebrow">figure 1 — the full topology</p>
+    </div>
+
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1180 540" role="img" aria-label="Topology of the Langfuse trace network in the a-game namespace. The brain calls the LiteLLM gateway on port 4000; the gateway calls api.anthropic.com on 443, the only connection leaving the cluster, and separately posts each trace to langfuse-web on port 3000. langfuse-web stores the raw event in MinIO on 9000 and enqueues a reference in Redis db 1 on 6379. langfuse-worker then opens its own outbound connections: to Redis on 6379 to poll for the reference, to MinIO on 9000 to fetch the event body, and to ClickHouse on 8123 and 9000 to write rows. Neither Redis nor MinIO ever connects to the worker. langfuse-web queries ClickHouse for the UI and uses Postgres on 5432 for users, projects and API keys; langfuse-worker also uses Postgres. A one-shot bootstrap Job, a-game-create-lang-db, connects to Postgres on 5432 to create the langfuse role and database before any of this runs. Your browser reaches langfuse-web through kubectl port-forward.">
+          <defs>
+            <marker id="ar-n" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+              <polygon class="mk-n" points="0,0 10,4 0,8" />
+            </marker>
+            <marker id="ar-a" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+              <polygon class="mk-a" points="0,0 10,4 0,8" />
+            </marker>
+            <marker id="ar-s" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+              <polygon class="mk-s" points="0,0 10,4 0,8" />
+            </marker>
+          </defs>
+
+          <rect class="ns-box" x="16" y="64" width="1112" height="372" rx="4" />
+          <text class="t-ns" x="30" y="84">namespace: a-game</text>
+
+          <!-- external -->
+          <rect class="n-box ext" x="180" y="8" width="170" height="48" rx="2" />
+          <text class="t-title" x="265" y="30">api.anthropic.com</text>
+          <text class="t-sub" x="265" y="45">outside the cluster</text>
+
+          <rect class="n-box ext" x="100" y="456" width="220" height="48" rx="2" />
+          <text class="t-title" x="210" y="478">your browser</text>
+          <text class="t-sub" x="210" y="493">outside the cluster</text>
+
+          <!-- pods -->
+          <rect class="n-box" x="30" y="180" width="120" height="66" rx="2" />
+          <text class="t-title" x="90" y="207">a-game-brain</text>
+          <text class="t-sub" x="90" y="225">unchanged</text>
+
+          <rect class="n-box" x="205" y="180" width="120" height="66" rx="2" />
+          <text class="t-title" x="265" y="207">a-game-litellm</text>
+          <text class="t-sub" x="265" y="225">:4000 · gateway</text>
+
+          <rect class="n-box new" x="380" y="180" width="120" height="66" rx="2" />
+          <text class="t-title" x="440" y="207">langfuse-web</text>
+          <text class="t-sub" x="440" y="225">:3000 · ingest + UI</text>
+
+          <rect class="n-box new" x="755" y="180" width="125" height="66" rx="2" />
+          <text class="t-title" x="817" y="207">langfuse-worker</text>
+          <text class="t-sub" x="817" y="225">:3030 · async</text>
+
+          <rect class="n-box new" x="940" y="180" width="140" height="66" rx="2" />
+          <text class="t-title" x="1010" y="207">ClickHouse</text>
+          <text class="t-sub" x="1010" y="225">:8123 · :9000</text>
+
+          <rect class="n-box" x="570" y="112" width="130" height="56" rx="2" />
+          <text class="t-title" x="635" y="136">a-game-redis</text>
+          <text class="t-sub" x="635" y="152">:6379 · db 1 queue</text>
+
+          <rect class="n-box new" x="570" y="258" width="130" height="56" rx="2" />
+          <text class="t-title" x="635" y="282">MinIO</text>
+          <text class="t-sub" x="635" y="298">:9000 · raw events</text>
+
+          <rect class="n-box" x="555" y="352" width="170" height="56" rx="2" />
+          <text class="t-title" x="640" y="376">a-game-postgres</text>
+          <text class="t-sub" x="640" y="392">:5432 · langfuse db</text>
+
+          <!-- one-shot bootstrap -->
+          <rect class="n-box job" x="890" y="352" width="180" height="56" rx="2" />
+          <text class="t-title" x="980" y="376">a-game-create-lang-db</text>
+          <text class="t-sub" x="980" y="392">Job · runs once, then gone</text>
+
+          <!-- edges -->
+          <path class="e" d="M150,213 H197" marker-end="url(#ar-n)" />
+          <text class="t-edge" x="173" y="205" text-anchor="middle">prompt</text>
+
+          <path class="e sig" d="M265,180 V64" marker-end="url(#ar-s)" />
+          <text class="t-sig" x="275" y="104">model call :443</text>
+          <text class="t-sig" x="275" y="118">the only way out</text>
+
+          <path class="e hop" d="M325,213 H372" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="348" y="199" text-anchor="middle">trace</text>
+
+          <path class="e acc" d="M500,194 L562,157" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="560" y="143" text-anchor="end">enqueue ref</text>
+          <path class="e acc" d="M500,232 L562,267" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="560" y="292" text-anchor="end">put blob</text>
+          <path class="e acc" d="M747,193 L700,157" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="710" y="143" text-anchor="start">poll · dequeue ref</text>
+          <path class="e acc" d="M747,233 L700,267" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="710" y="292" text-anchor="start">fetch blob</text>
+          <path class="e acc" d="M880,213 H932" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="906" y="197" text-anchor="middle">write rows</text>
+
+          <path class="e" d="M490,180 V96 H1010 V172" marker-end="url(#ar-n)" />
+          <text class="t-edge" x="750" y="88" text-anchor="middle">queries traces for the UI :8123</text>
+
+          <path class="e" d="M470,246 V380 H547" marker-end="url(#ar-n)" />
+          <text class="t-edge" x="478" y="292">users ·</text>
+          <text class="t-edge" x="478" y="306">projects ·</text>
+          <text class="t-edge" x="478" y="320">API keys</text>
+
+          <path class="e" d="M817,246 V380 H733" marker-end="url(#ar-n)" />
+          <text class="t-edge" x="825" y="306">job state</text>
+
+          <path class="e once" d="M890,398 H733" marker-end="url(#ar-s)" />
+          <text class="t-sig" x="811" y="390" text-anchor="middle">role + db · 5432</text>
+
+          <path class="e" d="M210,456 V330 H440 V252" marker-end="url(#ar-n)" />
+          <text class="t-edge" x="218" y="398">kubectl port-forward</text>
+          <text class="t-edge" x="218" y="412">:3000</text>
+
+          <!-- step badges -->
+          <circle class="badge" cx="348" cy="213" r="10" />
+          <text class="badge-t" x="348" y="216.5">1</text>
+          <circle class="badge" cx="531" cy="175" r="10" />
+          <text class="badge-t" x="531" y="178.5">3</text>
+          <circle class="badge" cx="531" cy="250" r="10" />
+          <text class="badge-t" x="531" y="253.5">2</text>
+          <circle class="badge" cx="723" cy="175" r="10" />
+          <text class="badge-t" x="723" y="178.5">4</text>
+          <circle class="badge" cx="723" cy="250" r="10" />
+          <text class="badge-t" x="723" y="253.5">5</text>
+          <circle class="badge" cx="906" cy="213" r="10" />
+          <text class="badge-t" x="906" y="216.5">6</text>
+        </svg>
+      </div>
+      <ol class="steps">
+        <li><span class="n">1</span><span>The gateway posts the finished call — prompt, response, tokens, cost, latency, model version — to <code>langfuse-web:3000</code>.</span></li>
+        <li><span class="n">2</span><span>Web writes the raw event body to MinIO as a blob.</span></li>
+        <li><span class="n">3</span><span>Web enqueues a <em>reference</em> to that blob in Redis db 1, then answers the gateway. Ingestion is done in milliseconds.</span></li>
+        <li><span class="n">4</span><span>Worker <strong>connects out to</strong> Redis and pops the reference. Redis never calls the worker.</span></li>
+        <li><span class="n">5</span><span>Worker <strong>connects out to</strong> MinIO and fetches the event body. Same shape — data inbound, connection outbound.</span></li>
+        <li><span class="n">6</span><span>Worker writes the trace and observation rows into ClickHouse, where the UI reads them.</span></li>
+      </ol>
+      <figcaption>The queue is the point: <strong>web accepts and hands off, worker does the writing.</strong> That's why Redis stops being a removable cache and why the blob store exists at all — the event body is too big to sit in a queue, so only a pointer is enqueued. The dashed edge is not part of this flow: the bootstrap Job runs once, before any of it, and is the only thing here holding the Postgres superuser password. Note what <em>doesn't</em> happen: nothing in this figure reaches the internet except the gateway's model call, and nothing ever connects to <code>langfuse-worker</code>. Steps 4 and 5 are the two that mislead: the data travels toward the worker, so the instinct is to draw the arrow that way — but the worker is the caller on both, and the caller is all NetworkPolicy sees.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>What the callback flip actually changes</h2>
+      <p class="eyebrow">figure 2 — before and after</p>
+    </div>
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 920 260" role="img" aria-label="Before and after comparison. Before: brain calls litellm, litellm calls api.anthropic.com. After: the same two hops are unchanged, plus one new edge from litellm down to langfuse-web, sent asynchronously after the response.">
+          <defs>
+            <marker id="ar-n2" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+              <polygon class="mk-n" points="0,0 10,4 0,8" />
+            </marker>
+            <marker id="ar-a2" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
+              <polygon class="mk-a" points="0,0 10,4 0,8" />
+            </marker>
+          </defs>
+
+          <text class="t-ns" x="20" y="30">before — today</text>
+          <rect class="n-box" x="20" y="90" width="100" height="44" rx="2" />
+          <text class="t-title" x="70" y="117">brain</text>
+          <rect class="n-box" x="165" y="90" width="100" height="44" rx="2" />
+          <text class="t-title" x="215" y="117">litellm</text>
+          <rect class="n-box ext" x="310" y="90" width="100" height="44" rx="2" />
+          <text class="t-title" x="360" y="117">anthropic</text>
+          <path class="e" d="M120,112 H157" marker-end="url(#ar-n2)" />
+          <path class="e" d="M265,112 H302" marker-end="url(#ar-n2)" />
+          <text class="t-edge" x="138" y="104">:4000</text>
+          <text class="t-edge" x="272" y="104">:443</text>
+
+          <line x1="460" y1="16" x2="460" y2="244" stroke="var(--line)" stroke-width="1" />
+
+          <text class="t-ns" x="490" y="30">after — success_callback: [&quot;langfuse&quot;]</text>
+          <rect class="n-box" x="490" y="90" width="100" height="44" rx="2" />
+          <text class="t-title" x="540" y="117">brain</text>
+          <rect class="n-box" x="635" y="90" width="100" height="44" rx="2" />
+          <text class="t-title" x="685" y="117">litellm</text>
+          <rect class="n-box ext" x="780" y="90" width="100" height="44" rx="2" />
+          <text class="t-title" x="830" y="117">anthropic</text>
+          <path class="e" d="M590,112 H627" marker-end="url(#ar-n2)" />
+          <path class="e" d="M735,112 H772" marker-end="url(#ar-n2)" />
+          <text class="t-edge" x="608" y="104">:4000</text>
+          <text class="t-edge" x="742" y="104">:443</text>
+
+          <rect class="n-box new" x="635" y="196" width="100" height="44" rx="2" />
+          <text class="t-title" x="685" y="223">langfuse-web</text>
+          <path class="e hop" d="M685,134 V188" marker-end="url(#ar-a2)" />
+          <text class="t-edge" x="697" y="166">:3000 · after the fact</text>
+        </svg>
+      </div>
+      <figcaption>Two lines of YAML in the gateway's ConfigMap. The request path is byte-for-byte identical — <strong>the brain never learns Langfuse exists</strong>, and <code>commentary.py</code> is not touched. One outbound edge is added, sent after the response is already on its way back. If Langfuse is down you lose the trace, not the preview.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Every edge, and the policy it needs</h2>
+      <p class="eyebrow">both sides required — client egress <em>and</em> server ingress</p>
+    </div>
+
+    <div class="note calm">
+      <p><strong>Who dials whom, one line each.</strong> <code>brain</code> → litellm. <code>litellm</code> → anthropic, langfuse-web. <code>langfuse-web</code> → postgres, redis, minio, clickhouse. <code>langfuse-worker</code> → postgres, redis, minio, clickhouse. <code>create-lang-db</code> → postgres. That is the complete list of callers. <code>postgres</code>, <code>redis</code>, <code>minio</code>, <code>clickhouse</code> and <code>langfuse-worker</code> never open a connection to anything — they only accept — so none of them needs an egress rule beyond the DNS one every pod in the namespace already inherits.</p>
+    </div>
+
+    <div class="tbl-frame">
+      <table>
+        <thead>
+          <tr><th>From</th><th>To</th><th>Port</th><th>Carries</th><th>NetworkPolicy</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">brain</td><td class="mono">litellm</td><td class="port">4000</td><td>Completion request</td><td><span class="pol-has">already applied</span></td></tr>
+          <tr><td class="mono">litellm</td><td class="mono">api.anthropic.com</td><td class="port">443</td><td>The model call — the only egress leaving the cluster</td><td><span class="pol-has">already applied</span></td></tr>
+          <tr class="is-job"><td class="mono">create-lang-db</td><td class="mono">postgres</td><td class="port">5432</td><td>Creates the <code>langfuse</code> role and database, as superuser</td><td><span class="pol-job">new egress + add to allow-postgres</span></td></tr>
+          <tr class="is-new"><td class="mono">litellm</td><td class="mono">langfuse-web</td><td class="port">3000</td><td>The trace, after the response</td><td><span class="pol-new">new egress item on litellm + new ingress</span></td></tr>
+          <tr class="is-new"><td class="mono">langfuse-web</td><td class="mono">postgres</td><td class="port">5432</td><td>Users, projects, API-key verification</td><td><span class="pol-new">new egress + add to allow-postgres</span></td></tr>
+          <tr class="is-new"><td class="mono">langfuse-web</td><td class="mono">redis</td><td class="port">6379</td><td>Enqueue the event reference (db 1)</td><td><span class="pol-new">new egress + add to allow-redis</span></td></tr>
+          <tr class="is-new"><td class="mono">langfuse-web</td><td class="mono">minio</td><td class="port">9000</td><td>Store the raw event body</td><td><span class="pol-new">new egress + new allow-minio</span></td></tr>
+          <tr class="is-new"><td class="mono">langfuse-web</td><td class="mono">clickhouse</td><td class="port">8123 · 9000</td><td>Read traces for the UI (8123); it also carries <code>CLICKHOUSE_MIGRATION_URL</code> (9000)</td><td><span class="pol-new">new egress + new allow-clickhouse</span></td></tr>
+          <tr class="is-new"><td class="mono">langfuse-worker</td><td class="mono">redis</td><td class="port">6379</td><td>Dequeue the reference</td><td><span class="pol-new">new egress + add to allow-redis</span></td></tr>
+          <tr class="is-new"><td class="mono">langfuse-worker</td><td class="mono">minio</td><td class="port">9000</td><td>Fetch the event body back</td><td><span class="pol-new">new egress + new allow-minio</span></td></tr>
+          <tr class="is-new"><td class="mono">langfuse-worker</td><td class="mono">clickhouse</td><td class="port">8123 · 9000</td><td>Write trace rows (8123) and run schema migrations (9000, native protocol)</td><td><span class="pol-new">new egress + new allow-clickhouse</span></td></tr>
+          <tr class="is-new"><td class="mono">langfuse-worker</td><td class="mono">postgres</td><td class="port">5432</td><td>Job and project state</td><td><span class="pol-new">new egress + add to allow-postgres</span></td></tr>
+          <tr><td class="mono">your browser</td><td class="mono">langfuse-web</td><td class="port">3000</td><td>The UI, over <code>kubectl port-forward</code></td><td><span class="pol-has">none needed — see below</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <ul class="plain">
+      <li><strong>Six ports total, and only one of them is new to your cluster:</strong> 3000, 3030, 8123, 9000 arrive with Langfuse; 5432 and 6379 you already allow, they just gain new clients — three more on 5432 once the Job is counted.</li>
+      <li><strong>ClickHouse needs two ports open, not one.</strong> 8123 is HTTP for queries, 9000 is the native TCP protocol used by <code>CLICKHOUSE_MIGRATION_URL</code>. Open only 8123 and everything looks fine until the migration runs.</li>
+      <li><strong><code>langfuse-worker</code> needs no ingress policy at all.</strong> Nothing connects to it — it only ever dials out. Same reasoning your file already records for brain and worker: unreachable by default is correct, not an omission.</li>
+      <li><strong>Data direction is not connection direction.</strong> Redis hands the worker a job and MinIO hands it a blob, so both <em>look</em> like they push. They don’t — the worker opens both connections and the payload comes back down them. NetworkPolicy is connection-oriented: reply traffic on an established connection is allowed with no rule of its own, which is why <code>a-game-postgres</code> has no egress policy at all yet still answers every query it receives. Write the rule for the caller, never for the payload.</li>
+      <li><strong>Both halves must point at the same Redis db.</strong> Web enqueues to <code>db 1</code>, so the worker has to consume from <code>db 1</code>. Point one of them at <code>db 0</code> and each side looks perfectly healthy on its own — web accepts traces, worker sits waiting for jobs — while nothing ever reaches ClickHouse and the UI stays empty.</li>
+      <li><strong>DNS is already handled.</strong> <code>a-game-network-egress-policy</code> is <code>podSelector: {}</code> and opens 53 to kube-dns in kube-system, so every new pod inherits name resolution. It also inherits the default-deny that blocks everything else.</li>
+    </ul>
+
+    <div class="note">
+      <p><strong>What a missing rule looks like.</strong> The bootstrap Job's first real run is the worked example: the container started cleanly, then failed in about a second, five times, and the Job controller deleted the pod on <code>BackoffLimitExceeded</code> — taking the logs with it before <code>ttlSecondsAfterFinished</code> ever mattered. A one-second failure is a refused connection, not a timeout; k3s enforces policy in-process and rejects rather than drops. Two habits follow: while debugging a Job, use <code>restartPolicy: Never</code> with <code>backoffLimit: 0</code> so the failed pod and its logs survive, and read <code>kubectl describe job</code> when no pod appears at all — a missing ServiceAccount never reaches the logs.</p>
+    </div>
+
+    <div class="note calm">
+      <p><strong>Why the browser needs no policy.</strong> <code>kubectl port-forward</code> is not pod-to-pod traffic. It tunnels through the API server to the kubelet, which opens the connection to the pod from the <em>node's</em> network namespace — so there is no source pod for a <code>podSelector</code> to match, and the ingress rules never come into play. That's also why it's the cheap way in: no Traefik rule, no host-based Ingress, no <code>NEXTAUTH_URL</code> carrying port 8080. The moment you swap it for a real Ingress, all three come back.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>Which secret feeds which edge</h2>
+      <p class="eyebrow">six secrets — and only two of them are new values</p>
+    </div>
+    <div class="tbl-frame">
+      <table>
+        <thead>
+          <tr><th>Secret</th><th>Holds</th><th>Read by</th><th>How it's wired</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">db-credentials</td><td>Postgres superuser — <code>POSTGRES_USER</code>, <code>POSTGRES_PASSWORD</code></td><td>the bootstrap Job, and nothing else in Langfuse</td><td>Explicit <code>secretKeyRef</code> renaming both to <code>PGUSER</code> / <code>PGPASSWORD</code></td></tr>
+          <tr><td class="mono">lang-db-credentials</td><td>the <code>langfuse</code> role's password — <code>PGPASSWORD</code></td><td>Job, web, worker</td><td>Job reads it as <code>LANG_PG_PASSWORD</code>; web and worker as <code>DATABASE_PASSWORD</code></td></tr>
+          <tr><td class="mono">clickhouse-credentials</td><td><code>CLICKHOUSE_USER</code>, <code>CLICKHOUSE_PASSWORD</code></td><td>ClickHouse itself, web, worker</td><td><code>envFrom</code> — the image and Langfuse read the same two variable names</td></tr>
+          <tr><td class="mono">minio-credentials</td><td><code>MINIO_ROOT_USER</code>, <code>MINIO_ROOT_PASSWORD</code></td><td>MinIO itself, web, worker</td><td>Four <code>secretKeyRef</code> entries — the names don't match, so <code>envFrom</code> is wrong here</td></tr>
+          <tr class="is-new"><td class="mono">langfuse-credentials</td><td><code>SALT</code>, <code>ENCRYPTION_KEY</code></td><td>web and worker, byte-identical</td><td><code>envFrom</code> on both containers</td></tr>
+          <tr class="is-new"><td class="mono">langfuse-web-secrets</td><td><code>NEXTAUTH_SECRET</code> + six <code>LANGFUSE_INIT_*</code></td><td>web only</td><td><code>envFrom</code> on web</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <ul class="plain">
+      <li><strong>Reference, don't copy.</strong> ClickHouse's and MinIO's credentials are read straight from the secrets those datastores already own. A copied credential is a credential that can drift — rotate MinIO's password and Langfuse follows on restart instead of silently failing uploads.</li>
+      <li><strong>No <code>DATABASE_URL</code>.</strong> Langfuse accepts <code>DATABASE_HOST</code>, <code>DATABASE_NAME</code>, <code>DATABASE_USERNAME</code> and <code>DATABASE_PASSWORD</code> instead, so the password is read from one key rather than embedded in a connection string that has to be kept in lockstep with it. Set one form or the other, never both.</li>
+      <li><strong>The three-way split is forced by <code>SALT</code> and <code>ENCRYPTION_KEY</code>.</strong> They must be byte-identical across web and worker, which is why they can't live in the web-only secret — and the six <code>LANGFUSE_INIT_*</code> keys must not reach the worker, which is why they can't live in the shared one. <code>ENCRYPTION_KEY</code> is hex-32; <code>SALT</code> and <code>NEXTAUTH_SECRET</code> are base64-32.</li>
+      <li><strong>The superuser password stops at the Job.</strong> Nothing in the running system holds it — that's the argument against an <code>initContainer</code> on <code>langfuse-web</code>, which would have mounted it into an application pod that stays up.</li>
+    </ul>
+
+    <div class="note">
+      <p><strong>Two things to verify before the policy pass.</strong> If <code>clickhouse-credentials</code> also carries a <code>CLICKHOUSE_DB</code> key, <code>envFrom</code> injects it into Langfuse — and Langfuse needs <code>default</code>. That variable is what cost the first ClickHouse boot: <code>a-game</code> in an unquoted <code>CREATE DATABASE</code> parses the hyphen as minus and exits with a syntax error. Second, Langfuse runs its schema migrations as <code>CLICKHOUSE_USER</code>; if that's a restricted user rather than <code>default</code>, the migration is where you'll find out.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>What changes on EKS</h2>
+      <p class="eyebrow">the local shortcuts, and which ones carry forward</p>
+    </div>
+    <ul class="plain">
+      <li><strong>Postgres becomes RDS and only <code>PGHOST</code> moves.</strong> The Job is a pod reaching a network endpoint with a Secret, which is the same shape either way. <code>db-credentials</code> survives as a Secret object, synced from AWS Secrets Manager by External Secrets — not the CSI driver alone, since <code>secretRef</code> needs a real Secret.</li>
+      <li><strong>MinIO becomes S3.</strong> Which also retires the least-privilege compromise here: Langfuse currently authenticates as MinIO <em>root</em>, acceptable for a single-tenant local store, replaced by a scoped credential on EKS.</li>
+      <li><strong>NetworkPolicy stops being enforced the moment you leave k3d.</strong> A <code>NetworkPolicy</code> is only an API object. The apiserver validates and stores it; enforcing it is entirely the CNI plugin’s job, and nothing in Kubernetes itself does it. k3s bundles kube-router’s policy controller, so your cluster enforces out of the box. EKS defaults to the Amazon VPC CNI, which ships an enforcement agent but leaves it <em>off</em>: without <code>"enableNetworkPolicy": "true"</code> in the <code>vpc-cni</code> add-on’s configuration values, every policy in <code>50-networkpolicies.yaml</code> applies cleanly, lists under <code>kubectl get netpol</code>, and is enforced by absolutely nothing. No error, no event, no warning — the namespace is simply wide open while looking correct. Needs VPC CNI v1.14.0-eksbuild.3 or later, and Linux EC2 nodes; not Fargate, not Windows.</li>
+      <li><strong>Verify enforcement with a connection, never with <code>kubectl get</code>.</strong> The one honest test is a pod that should be refused: exec into a long-lived pod with no matching egress rule and try the hop. Refused or timed out means the agent is live; a successful connection means every policy here is decoration. Do this once per cluster, right after the add-on config lands.</li>
+      <li><strong>Two more EKS-only footguns in this file.</strong> The VPC CNI applies policy to a pod’s primary interface (<code>eth0</code>) only, and enforcement is unreliable for standalone pods with no <code>metadata.ownerReferences</code> — everything here is Deployment-, StatefulSet- or Job-owned, so that one is already satisfied. Separately, the <code>0.0.0.0/0</code> ipBlock on litellm and worker stops meaning “k3d’s <code>10.42.0.0/16</code> plus the internet” and starts meaning your entire VPC. Narrow it to a real destination CIDR once the network layer exists.</li>
+      <li><strong>Don’t make NetworkPolicy the only control.</strong> It governs east-west pod-to-pod traffic and nothing else. Security groups for pods govern what the pod reaches in the VPC and beyond, and AWS supports running both together. For a tier holding prompts and completions, the pairing worth having is this file for in-cluster traffic plus a pod security group that stops web and worker reaching anywhere in the VPC they have no business in.</li>
+      <li><strong><code>kubectl port-forward</code> stops being the way in.</strong> A real Ingress brings back the Traefik-equivalent rule, the host name, and a <code>NEXTAUTH_URL</code> that has to match what the browser actually types.</li>
+    </ul>
+  </section>
+
+</div>

@@ -128,6 +128,19 @@ def test_the_prompt_carries_the_league_baselines(match):
     assert "45%" in prompt
 
 
+def test_the_prompt_supplies_the_inverse_markets(match):
+    """SUGGESTED_BETS offers Under 2.5 and BTTS-no, so the prompt has to hand
+    over their percentages and baselines. Without them the model works out
+    100 - x, which this same prompt forbids - it invented three such figures
+    before these lines existed."""
+    prompt = commentary._user_prompt(match, poisson.score_probabilities(0.94, 0.81))
+
+    assert "Under 2.5 goals:" in prompt
+    assert "Both teams to score - no:" in prompt
+    assert "under 2.5 goals 48%" in prompt
+    assert "both teams to score - no 52%" in prompt
+
+
 def test_the_prompt_handles_a_missing_matchday(match):
     """matchday is null for some cup stages — rendering `None` into the prompt
     would have the model writing about matchday None."""

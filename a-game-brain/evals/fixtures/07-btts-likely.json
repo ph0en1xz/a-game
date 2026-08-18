@@ -1,0 +1,25 @@
+{
+  "name": "btts-likely",
+  "id": 900007,
+  "home_team_id": 67,
+  "away_team_id": 58,
+  "home_team": "Newcastle United FC",
+  "away_team": "Aston Villa FC",
+  "matchday": 9,
+  "utc_date": "2026-10-17T14:00:00+00:00",
+  "probabilities": {
+    "lambda_home": 1.74,
+    "lambda_away": 1.58,
+    "prob_home": 0.41,
+    "prob_draw": 0.24,
+    "prob_away": 0.35,
+    "over_2_5": 0.57,
+    "btts": 0.72,
+    "most_likely_scores": [
+      {"home": 2, "away": 1, "prob": 0.1},
+      {"home": 1, "away": 1, "prob": 0.1},
+      {"home": 2, "away": 2, "prob": 0.08}
+    ]
+  },
+  "expected_bet": "Both teams to score"
+}

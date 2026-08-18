@@ -1,0 +1,78 @@
+name: Evals - a-game-brain
+
+# Two modes, deliberately. The pull-request job replays a saved corpus: it costs
+# nothing, needs no secrets, and catches the code path or the checks breaking.
+# Only the nightly job calls a real model, which is the only thing that can
+# catch the prompt or the model itself drifting.
+
+on:
+  pull_request:
+    paths:
+      - 'a-game-brain/**'
+      - '.github/workflows/evals-a-game-brain.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  replay:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: a-game-brain
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: '0.11.28'
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # --no-cov because the root addopts carry --cov-fail-under=80, which an
+      # eval run neither can nor should satisfy.
+      - name: Evals (replay)
+        run: uv run pytest evals --no-cov -q
+
+  live:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: a-game-brain
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: '0.11.28'
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # -s so the bet-selection table prints on a pass as well as a failure -
+      # the score is the point, not just whether it cleared the threshold.
+      - name: Evals (live)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: uv run pytest evals --no-cov -q -s --live

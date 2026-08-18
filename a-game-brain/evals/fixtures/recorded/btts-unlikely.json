@@ -1,0 +1,8 @@
+{
+  "arguments": {
+    "text": "Crystal Palace FC are made slight favourites by the model at 49% for a home win, a 4 percentage point lift above the league baseline of 45%. Sheffield United FC arrive as underdogs at 25%, well below the baseline of 28%. The fixture is expected to be a low-scoring affair, with the model assigning a 76% probability to both teams failing to score, a significant 24 percentage point departure from the baseline. Palace's expected goal advantage of 1.62 to 0.62 suggests they should dominate possession and chances.",
+    "suggested_bet": "Both teams to score - no",
+    "suggested_bet_reason": "The model gives both teams to score - no a 76% probability, departing 24 percentage points above the league baseline of 52%."
+  },
+  "model": "anthropic/claude-haiku-4-5-20251001"
+}

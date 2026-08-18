@@ -18,6 +18,8 @@ VS Code; the `.html` diagrams open in a browser.
 | 6 | [`network-topology.html`](network-topology.html) | The AWS network layer: how a public ALB in the public subnets routes inbound traffic to api pods in the private subnets across two AZs, plus route tables and NAT egress |
 | 7 | [`ai-platform-topology.html`](ai-platform-topology.html) | **The AI platform layer** (ADR 0008): LiteLLM gateway as the one LLM egress hop — two provider routes, Claude Haiku primary with OpenAI as its fallback, a third self-hosted CPU-scale route planned — plus Langfuse tracing, pgvector RAG, a tool-using agent, and Argo (orchestration fork open — see the doc) as private-subnet workloads. The **flagship deliverable is the CI eval gate** (golden dataset, fact-checker, LLM-as-judge, regression block — 2026-08-05). See [`ai-platform.md`](ai-platform.md) for the full design |
 | 8 | [`irsa-flow.html`](irsa-flow.html) | **IRSA** — how a pod trades a Kubernetes service account token for its own temporary IAM credentials: the OIDC issuer, the STS exchange, and why the node role isn't good enough. Also disambiguates the three certificates involved |
+| 9 | [`langfuse-trace-network.html`](langfuse-trace-network.html) | **The Langfuse trace path** (ADR 0008 Tier 1): how one trace moves from the LiteLLM gateway through web, MinIO, the Redis queue and the worker into ClickHouse — plus a table of every edge and the NetworkPolicy each one needs, both sides |
+| 10 | [`k3d-to-eks-delta.md`](k3d-to-eks-delta.md) | **What changes on EKS** — the four things that fail silently (NetworkPolicy not enforced, `local-path` missing, hand-created Secrets, static keys → IRSA), the component swaps, and a per-file summary. Written while the reasoning behind each local value was still fresh |
 
 ## The design in three sentences
 
@@ -42,7 +44,7 @@ adopted as a learning target.
 
 ## Maintenance
 
-Diagrams 1–5 are hand-maintained SVG; `network-topology.html`, `ai-platform-topology.html`, and
-`irsa-flow.html` are self-contained HTML pages (inline CSS, theme-aware, no external assets) — open any of them
-in a browser. Any ADR that changes the architecture must update the affected diagrams **in the
-same change**.
+Diagrams 1–5 are hand-maintained SVG; `network-topology.html`, `ai-platform-topology.html`,
+`irsa-flow.html` and `langfuse-trace-network.html` are self-contained HTML pages (inline CSS,
+theme-aware, no external assets) — open any of them in a browser. Any ADR that changes the
+architecture must update the affected diagrams **in the same change**.

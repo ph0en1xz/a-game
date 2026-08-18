@@ -1,0 +1,25 @@
+{
+  "name": "strong-away-side",
+  "id": 900004,
+  "home_team_id": 340,
+  "away_team_id": 57,
+  "home_team": "Southampton FC",
+  "away_team": "Arsenal FC",
+  "matchday": 6,
+  "utc_date": "2026-09-19T14:00:00+00:00",
+  "probabilities": {
+    "lambda_home": 0.96,
+    "lambda_away": 1.92,
+    "prob_home": 0.24,
+    "prob_draw": 0.25,
+    "prob_away": 0.51,
+    "over_2_5": 0.55,
+    "btts": 0.52,
+    "most_likely_scores": [
+      {"home": 0, "away": 2, "prob": 0.11},
+      {"home": 1, "away": 2, "prob": 0.1},
+      {"home": 0, "away": 1, "prob": 0.1}
+    ]
+  },
+  "expected_bet": "Away win"
+}

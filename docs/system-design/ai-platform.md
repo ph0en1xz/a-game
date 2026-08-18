@@ -12,7 +12,8 @@ Tier 1 first, then Tier 2; Tier 3 stays a design.
 > **Correction, 2026-07-30.** This document was written on 2026-07-22 against an assumed
 > current state that was never built. Corrected throughout on that date to match ADR 0008's
 > three amendments. The two claims that were most wrong: the LLM call did not exist (and still
-> doesn't — `handlers.py` is a stub), and Langfuse v3 needs six components, not one Postgres.
+> doesn't — `handlers.py` is a stub), and Langfuse needs six components, not one Postgres.
+> (Version note, 2026-08-12: v3 at the time of writing, **v4** now — the same six components.)
 >
 > **Update, 2026-08-04.** The gateway now carries **two** providers with a fallback chain
 > (ADR 0008 §Amendments, 2026-08-04). Sections below reflect that decision; the manifest change
@@ -266,7 +267,7 @@ Concrete, current-state → target, in build order:
 | 2c | k8s | **Add** the `gpt-4o-mini` route to the same `litellm-config` ConfigMap (one more `model_list` entry, not a second ConfigMap) plus `litellm_settings.fallbacks` mapping `claude-haiku → [gpt-4o-mini]`. LiteLLM parses `config.yaml` at startup, so editing the ConfigMap alone is a no-op — a `rollout restart` is required |
 | 3 | Python | **`commentary.py` (new file, in the brain pod — not a new service):** `openai` client pointed at the gateway Service; `LITELLM_BASE_URL` + virtual key in brain's env, never `ANTHROPIC_API_KEY`. Swap `anthropic` → `openai` in `pyproject.toml` |
 | 4 | Python | **`commentary.py`:** return pydantic-validated JSON (structured output), not free text |
-| 5 | k8s | **Add** `langfuse-web` + `langfuse-worker` Deployments, ClickHouse + MinIO StatefulSets (all ClusterIP); give Langfuse a dedicated database on the app Postgres and a dedicated `REDIS_DB` index (option C); wire the gateway to emit traces to it |
+| 5 | k8s | **Add** `langfuse-web` + `langfuse-worker` Deployments, ClickHouse + MinIO StatefulSets (all ClusterIP); give Langfuse a dedicated database on the app Postgres and its own logical Redis db index (db 1, via the connection string — no `REDIS_DB` variable exists; corrected 2026-08-12) (option C); wire the gateway to emit traces to it |
 | 6 | CI | **Add** the eval-harness job to the GitHub Actions workflow — golden dataset in-repo, deterministic checks + fact-checker, LLM-as-judge, regression gate blocking merge. **This is the flagship deliverable of the layer** (2026-08-05) |
 | 6b | Evals | **Produce** the model-comparison report from the same harness: quality / latency p50–p95 / cost per preview, per gateway route (2026-08-05) |
 | 6c | Docs | **Write** the AI threat-model doc under `docs/` — prompt-injection surface, exfiltration paths, credential blast radius, egress exception, cost abuse (2026-08-05) |

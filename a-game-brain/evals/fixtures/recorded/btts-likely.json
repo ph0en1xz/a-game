@@ -1,0 +1,8 @@
+{
+  "arguments": {
+    "text": "Newcastle United are slight favourites at 41% to win this Matchday 9 encounter against Aston Villa, with the away side given a 35% probability of victory. Both teams to score is the standout call from the model at 72%, significantly above the league baseline of 48%, suggesting a match where Newcastle's 1.74 expected goals and Aston Villa's 1.58 might both find the net. The most likely scorelines are 2-1 and 1-1 at 10% each, with 2-2 following at 8%.",
+    "suggested_bet": "Both teams to score",
+    "suggested_bet_reason": "The model projects 72% probability for both teams to score, 24 percentage points above the league baseline of 48%."
+  },
+  "model": "anthropic/claude-haiku-4-5-20251001"
+}

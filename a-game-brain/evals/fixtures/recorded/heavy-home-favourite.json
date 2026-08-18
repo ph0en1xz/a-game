@@ -1,0 +1,8 @@
+{
+  "arguments": {
+    "text": "Manchester City are strong favourites against Ipswich Town, with the model making them 68% likely to win compared to a league baseline of 45%. The visitors face a significant challenge given Manchester City's expected goal advantage of 2.15 to 0.78, with a 2-0 scoreline the most probable outcome at 13%. The model suggests this will be a relatively low-scoring affair, with both teams to score rated at just 45% probability.",
+    "suggested_bet": "Home win",
+    "suggested_bet_reason": "The model makes Manchester City 68% likely to win, a substantial 23 percentage point departure above the 45% league baseline for home wins."
+  },
+  "model": "anthropic/claude-haiku-4-5-20251001"
+}

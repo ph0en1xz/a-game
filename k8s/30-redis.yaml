@@ -1,3 +1,12 @@
+# No `maxmemory` is set, so Redis keeps its default eviction policy: noeviction.
+# That is load-bearing, not incidental. Langfuse runs its ingestion queue on this
+# instance (BullMQ, ADR 0008 option C), and BullMQ requires noeviction — under any
+# evicting policy Redis silently discards queued trace events under pressure.
+# So: if a `maxmemory` limit is ever added here, add `--maxmemory-policy noeviction`
+# with it, or trace ingestion starts losing data with nothing in the logs.
+#
+# Two tenants share this instance by logical db index: db 0 is the api/brain
+# read-through cache, db 1 is the Langfuse queue.
 apiVersion: v1
 kind: Service
 metadata:

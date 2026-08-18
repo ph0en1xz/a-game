@@ -54,7 +54,27 @@ def healthz() -> Health:
     return Health(status=HealthStatus.OK, version=__version__)
 
 @app.get("/readyz", response_model=Health)
-def readyz() -> Health:
+async def readyz(request: Request) -> Health:
+    """Ready means both stores answered just now.
+
+    A probe that returns from memory tells the load balancer nothing: it stays
+    READY while every request behind it fails, which is the opposite of what a
+    readiness gate is for. Liveness stays memory-only on /health - a struggling
+    dependency should take a pod out of rotation, not restart it.
+    """
+    try:
+        async with request.app.state.pg_pool.acquire() as conn:
+            await conn.fetchrow("SELECT 1")
+        await request.app.state.redis_client.ping()
+    except Exception:
+        log.exception("readiness probe failed")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "not_ready",
+                "message": "A backing store is unavailable.",
+            })
+
     return Health(status=HealthStatus.READY, version=__version__)
 
 @app.get("/{match_id}", response_model=Prediction)

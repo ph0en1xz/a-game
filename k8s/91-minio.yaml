@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: a-game-lang-minio
+  namespace: a-game
+  labels:
+    app.kubernetes.io/name: a-game-lang-minio
+    app.kubernetes.io/part-of: a-game
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: a-game-lang-minio
+  ports:
+    - name: http
+      port: 9000
+      targetPort: 9000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: a-game-lang-minio
+  namespace: a-game
+  labels:
+    app.kubernetes.io/name: a-game-lang-minio
+    app.kubernetes.io/part-of: a-game
+spec:
+  serviceName: a-game-lang-minio # first  - define service name
+  replicas: 1                    # second - replicas
+  selector:                      # third  -  selector + matchLabels
+    matchLabels:
+      app.kubernetes.io/name: a-game-lang-minio
+  template:                      # fourth - template
+    metadata:
+      labels:
+        app.kubernetes.io/name: a-game-lang-minio
+        app.kubernetes.io/part-of: a-game
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999                        # Use non root user
+        fsGroup: 999                          # Is based on storage used by the pod - use non-root user
+        fsGroupChangePolicy: OnRootMismatch   # Boot files instantly
+      containers:
+        - name: lang-minio
+          image: cgr.dev/chainguard/minio
+          securityContext:
+            allowPrivilegeEscalation: false   # needs no capabilities at all
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 9000
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: minio-credentials
+          command: ["sh"]
+          args: ["-c", "mkdir -p /data/langfuse && minio server --address ':9000' --console-address ':9001' /data"]
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            timeoutSeconds: 10
+            initialDelaySeconds: 30
+          volumeMounts:
+            - name: minio-persistent-storage
+              mountPath: /data
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: minio-persistent-storage
+      spec:   # Just memorise it (standard)
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+
+  
+  

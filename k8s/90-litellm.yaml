@@ -26,6 +26,7 @@ data:
       num_retries: 2
       request_timeout: 50
       fallbacks: [{"claude-haiku": ["gpt-4o-mini"]}]
+      success_callback: ["langfuse_otel"]
 ---
 # Litellm service
 apiVersion: v1
@@ -83,6 +84,12 @@ spec:
                 { name: "anthropic-credentials" }
             - secretRef:
                 { name: "openai-credentials" }
+          env:
+            - { name: LANGFUSE_HOST, value: http://a-game-lang-web:3000 }
+            - { name: LANGFUSE_PUBLIC_KEY, valueFrom: {
+                secretKeyRef: { name: langfuse-web-secrets, key: LANGFUSE_INIT_PROJECT_PUBLIC_KEY } } }
+            - { name: LANGFUSE_SECRET_KEY, valueFrom: {
+                secretKeyRef: { name: langfuse-web-secrets, key: LANGFUSE_INIT_PROJECT_SECRET_KEY } } }
           volumeMounts: # where to put a volume
             - name: config
               mountPath: /etc/litellm
@@ -101,7 +108,7 @@ spec:
             timeoutSeconds: 3
             periodSeconds: 15
           resources:
-            requests: { cpu: 100m, memory: 512Mi }
+            requests: { cpu: 100m, memory: 1Gi }
             limits:   { cpu: 500m, memory: 2Gi }
           # No readOnlyRootFilesystem here: it's a third-party image and we
           # don't know what it writes. These two cost nothing either way.

@@ -24,13 +24,27 @@ async def test_health_reports_ok_and_the_running_version(api):
     assert response.json() == {"status": "ok", "version": __version__}
 
 
-async def test_readyz_reports_ready(api):
-    """It answers from memory and never touches a store, so it says READY even
-    with both stores down. Worth knowing before trusting it as a gate."""
+async def test_readyz_reports_ready_when_both_stores_answer(api, pool, redis):
     response = await api.get("/readyz")
 
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
+    assert pool.acquired == 1
+
+
+async def test_readyz_returns_503_when_a_store_is_down(api):
+    """The whole point of the probe: a dead dependency has to show up here."""
+
+    class Unreachable:
+        async def ping(self):
+            raise ConnectionError("redis is gone")
+
+    app.state.redis_client = Unreachable()
+
+    response = await api.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "not_ready"
 
 
 async def test_root_returns_the_placeholder_greeting(api):
