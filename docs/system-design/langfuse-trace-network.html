@@ -198,53 +198,10 @@
 <div class="wrap">
 
   <header class="prose">
-    <div class="eyebrow">a-game · ADR 0008 Tier 1 · item 5 · updated 2026-08-17</div>
+    <div class="eyebrow">a-game · ADR 0008 Tier 1 · item 5 · updated 2026-08-18</div>
     <h1>The Langfuse trace network</h1>
-    <p class="standfirst">Seven components, five of them new. Every connection, in the direction it actually flows, on the port it actually uses — plus the credential behind each one.</p>
+    <p class="standfirst">Seven components, five of them new. Every arrow runs from the component that <em>opens</em> the connection to the one that accepts it — the only direction NetworkPolicy can see, and not always the direction the data moves.</p>
   </header>
-
-  <section>
-    <div class="sec-head">
-      <h2>Where this actually stands</h2>
-      <p class="eyebrow">as of 2026-08-17 — branch (feat)/setup_langfuse</p>
-    </div>
-    <div class="state">
-      <div class="up">
-        <h3>running on k3d</h3>
-        <ul>
-          <li>a-game-postgres</li>
-          <li>a-game-redis</li>
-          <li>a-game-litellm</li>
-          <li>a-game-brain · a-game-api</li>
-          <li>a-game-lang-minio</li>
-          <li>a-game-lang-clickhouse</li>
-        </ul>
-        <p class="why">Both datastores came up 1/1 with zero restarts, four PVCs bound. ClickHouse answers queries; MinIO's <code>langfuse</code> bucket directory exists.</p>
-      </div>
-      <div class="held">
-        <h3>written, not yet working</h3>
-        <ul>
-          <li>21-langfuse-db.yaml</li>
-          <li>93-langfuse-web.yaml</li>
-          <li>94-langfuse-worker.yaml</li>
-        </ul>
-        <p class="why">The bootstrap Job ran and failed on <code>BackoffLimitExceeded</code> — it can't reach Postgres until the policy pass lands. Web and worker are mid-draft.</p>
-      </div>
-      <div class="none">
-        <h3>not built yet</h3>
-        <ul>
-          <li>the NetworkPolicy pass</li>
-          <li>langfuse-credentials</li>
-          <li>langfuse-web-secrets</li>
-          <li>the litellm callback flip</li>
-        </ul>
-        <p class="why">One policy pass covers every new edge below. The two secrets don't exist on the cluster. The callback flip is last — trace nowhere to go until then.</p>
-      </div>
-    </div>
-    <div class="note">
-      <p><strong>The order is not arbitrary.</strong> Nothing in the new half of this diagram can reach anything until the policy pass lands, and every miss presents as a crashloop or a refused connection rather than a policy error. So the sequence is web → worker → one policy pass → callback flip, and the bootstrap Job's real run waits for the same gate.</p>
-    </div>
-  </section>
 
   <section>
     <div class="sec-head">
@@ -273,7 +230,7 @@
 
     <figure>
       <div class="canvas">
-        <svg viewBox="0 0 1180 540" role="img" aria-label="Topology of the Langfuse trace network in the a-game namespace. The brain calls the LiteLLM gateway on port 4000; the gateway calls api.anthropic.com on 443, the only connection leaving the cluster, and separately posts each trace to langfuse-web on port 3000. langfuse-web stores the raw event in MinIO on 9000, enqueues a reference in Redis db 1 on 6379, and langfuse-worker dequeues it, fetches the event from MinIO, and writes rows to ClickHouse on 8123. langfuse-web queries ClickHouse for the UI and uses Postgres on 5432 for users, projects and API keys; langfuse-worker also uses Postgres. A one-shot bootstrap Job, a-game-create-lang-db, connects to Postgres on 5432 to create the langfuse role and database before any of this runs. Your browser reaches langfuse-web through kubectl port-forward.">
+        <svg viewBox="0 0 1180 540" role="img" aria-label="Topology of the Langfuse trace network in the a-game namespace. The brain calls the LiteLLM gateway on port 4000; the gateway calls api.anthropic.com on 443, the only connection leaving the cluster, and separately posts each trace to langfuse-web on port 3000. langfuse-web stores the raw event in MinIO on 9000 and enqueues a reference in Redis db 1 on 6379. langfuse-worker then opens its own outbound connections: to Redis on 6379 to poll for the reference, to MinIO on 9000 to fetch the event body, and to ClickHouse on 8123 and 9000 to write rows. Neither Redis nor MinIO ever connects to the worker. langfuse-web queries ClickHouse for the UI and uses Postgres on 5432 for users, projects and API keys; langfuse-worker also uses Postgres. A one-shot bootstrap Job, a-game-create-lang-db, connects to Postgres on 5432 to create the langfuse role and database before any of this runs. Your browser reaches langfuse-web through kubectl port-forward.">
           <defs>
             <marker id="ar-n" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto-start-reverse">
               <polygon class="mk-n" points="0,0 10,4 0,8" />
@@ -345,12 +302,18 @@
           <text class="t-sig" x="275" y="118">the only way out</text>
 
           <path class="e hop" d="M325,213 H372" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="348" y="199" text-anchor="middle">trace</text>
 
           <path class="e acc" d="M500,194 L562,157" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="560" y="143" text-anchor="end">enqueue ref</text>
           <path class="e acc" d="M500,232 L562,267" marker-end="url(#ar-a)" />
-          <path class="e acc" d="M700,157 L747,193" marker-end="url(#ar-a)" />
-          <path class="e acc" d="M700,267 L747,233" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="560" y="292" text-anchor="end">put blob</text>
+          <path class="e acc" d="M747,193 L700,157" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="710" y="143" text-anchor="start">poll · dequeue ref</text>
+          <path class="e acc" d="M747,233 L700,267" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="710" y="292" text-anchor="start">fetch blob</text>
           <path class="e acc" d="M880,213 H932" marker-end="url(#ar-a)" />
+          <text class="t-edge" x="906" y="197" text-anchor="middle">write rows</text>
 
           <path class="e" d="M490,180 V96 H1010 V172" marker-end="url(#ar-n)" />
           <text class="t-edge" x="750" y="88" text-anchor="middle">queries traces for the UI :8123</text>
@@ -389,11 +352,11 @@
         <li><span class="n">1</span><span>The gateway posts the finished call — prompt, response, tokens, cost, latency, model version — to <code>langfuse-web:3000</code>.</span></li>
         <li><span class="n">2</span><span>Web writes the raw event body to MinIO as a blob.</span></li>
         <li><span class="n">3</span><span>Web enqueues a <em>reference</em> to that blob in Redis db 1, then answers the gateway. Ingestion is done in milliseconds.</span></li>
-        <li><span class="n">4</span><span>Worker dequeues the reference.</span></li>
-        <li><span class="n">5</span><span>Worker fetches the event body back from MinIO.</span></li>
+        <li><span class="n">4</span><span>Worker <strong>connects out to</strong> Redis and pops the reference. Redis never calls the worker.</span></li>
+        <li><span class="n">5</span><span>Worker <strong>connects out to</strong> MinIO and fetches the event body. Same shape — data inbound, connection outbound.</span></li>
         <li><span class="n">6</span><span>Worker writes the trace and observation rows into ClickHouse, where the UI reads them.</span></li>
       </ol>
-      <figcaption>The queue is the point: <strong>web accepts and hands off, worker does the writing.</strong> That's why Redis stops being a removable cache and why the blob store exists at all — the event body is too big to sit in a queue, so only a pointer is enqueued. The dashed edge is not part of this flow: the bootstrap Job runs once, before any of it, and is the only thing here holding the Postgres superuser password. Note what <em>doesn't</em> happen: nothing in this figure reaches the internet except the gateway's model call, and nothing ever connects to <code>langfuse-worker</code>.</figcaption>
+      <figcaption>The queue is the point: <strong>web accepts and hands off, worker does the writing.</strong> That's why Redis stops being a removable cache and why the blob store exists at all — the event body is too big to sit in a queue, so only a pointer is enqueued. The dashed edge is not part of this flow: the bootstrap Job runs once, before any of it, and is the only thing here holding the Postgres superuser password. Note what <em>doesn't</em> happen: nothing in this figure reaches the internet except the gateway's model call, and nothing ever connects to <code>langfuse-worker</code>. Steps 4 and 5 are the two that mislead: the data travels toward the worker, so the instinct is to draw the arrow that way — but the worker is the caller on both, and the caller is all NetworkPolicy sees.</figcaption>
     </figure>
   </section>
 
@@ -455,6 +418,11 @@
       <h2>Every edge, and the policy it needs</h2>
       <p class="eyebrow">both sides required — client egress <em>and</em> server ingress</p>
     </div>
+
+    <div class="note calm">
+      <p><strong>Who dials whom, one line each.</strong> <code>brain</code> → litellm. <code>litellm</code> → anthropic, langfuse-web. <code>langfuse-web</code> → postgres, redis, minio, clickhouse. <code>langfuse-worker</code> → postgres, redis, minio, clickhouse. <code>create-lang-db</code> → postgres. That is the complete list of callers. <code>postgres</code>, <code>redis</code>, <code>minio</code>, <code>clickhouse</code> and <code>langfuse-worker</code> never open a connection to anything — they only accept — so none of them needs an egress rule beyond the DNS one every pod in the namespace already inherits.</p>
+    </div>
+
     <div class="tbl-frame">
       <table>
         <thead>
@@ -482,6 +450,8 @@
       <li><strong>Six ports total, and only one of them is new to your cluster:</strong> 3000, 3030, 8123, 9000 arrive with Langfuse; 5432 and 6379 you already allow, they just gain new clients — three more on 5432 once the Job is counted.</li>
       <li><strong>ClickHouse needs two ports open, not one.</strong> 8123 is HTTP for queries, 9000 is the native TCP protocol used by <code>CLICKHOUSE_MIGRATION_URL</code>. Open only 8123 and everything looks fine until the migration runs.</li>
       <li><strong><code>langfuse-worker</code> needs no ingress policy at all.</strong> Nothing connects to it — it only ever dials out. Same reasoning your file already records for brain and worker: unreachable by default is correct, not an omission.</li>
+      <li><strong>Data direction is not connection direction.</strong> Redis hands the worker a job and MinIO hands it a blob, so both <em>look</em> like they push. They don’t — the worker opens both connections and the payload comes back down them. NetworkPolicy is connection-oriented: reply traffic on an established connection is allowed with no rule of its own, which is why <code>a-game-postgres</code> has no egress policy at all yet still answers every query it receives. Write the rule for the caller, never for the payload.</li>
+      <li><strong>Both halves must point at the same Redis db.</strong> Web enqueues to <code>db 1</code>, so the worker has to consume from <code>db 1</code>. Point one of them at <code>db 0</code> and each side looks perfectly healthy on its own — web accepts traces, worker sits waiting for jobs — while nothing ever reaches ClickHouse and the UI stays empty.</li>
       <li><strong>DNS is already handled.</strong> <code>a-game-network-egress-policy</code> is <code>podSelector: {}</code> and opens 53 to kube-dns in kube-system, so every new pod inherits name resolution. It also inherits the default-deny that blocks everything else.</li>
     </ul>
 
@@ -535,7 +505,10 @@
     <ul class="plain">
       <li><strong>Postgres becomes RDS and only <code>PGHOST</code> moves.</strong> The Job is a pod reaching a network endpoint with a Secret, which is the same shape either way. <code>db-credentials</code> survives as a Secret object, synced from AWS Secrets Manager by External Secrets — not the CSI driver alone, since <code>secretRef</code> needs a real Secret.</li>
       <li><strong>MinIO becomes S3.</strong> Which also retires the least-privilege compromise here: Langfuse currently authenticates as MinIO <em>root</em>, acceptable for a single-tenant local store, replaced by a scoped credential on EKS.</li>
-      <li><strong>NetworkPolicy stops being enforced unless you make it.</strong> EKS ignores every policy in <code>50-networkpolicies.yaml</code> without the VPC CNI policy agent or Calico — silently, with everything still working. The CIDRs in that file are k3d and flannel; on EKS pods carry real VPC addresses.</li>
+      <li><strong>NetworkPolicy stops being enforced the moment you leave k3d.</strong> A <code>NetworkPolicy</code> is only an API object. The apiserver validates and stores it; enforcing it is entirely the CNI plugin’s job, and nothing in Kubernetes itself does it. k3s bundles kube-router’s policy controller, so your cluster enforces out of the box. EKS defaults to the Amazon VPC CNI, which ships an enforcement agent but leaves it <em>off</em>: without <code>"enableNetworkPolicy": "true"</code> in the <code>vpc-cni</code> add-on’s configuration values, every policy in <code>50-networkpolicies.yaml</code> applies cleanly, lists under <code>kubectl get netpol</code>, and is enforced by absolutely nothing. No error, no event, no warning — the namespace is simply wide open while looking correct. Needs VPC CNI v1.14.0-eksbuild.3 or later, and Linux EC2 nodes; not Fargate, not Windows.</li>
+      <li><strong>Verify enforcement with a connection, never with <code>kubectl get</code>.</strong> The one honest test is a pod that should be refused: exec into a long-lived pod with no matching egress rule and try the hop. Refused or timed out means the agent is live; a successful connection means every policy here is decoration. Do this once per cluster, right after the add-on config lands.</li>
+      <li><strong>Two more EKS-only footguns in this file.</strong> The VPC CNI applies policy to a pod’s primary interface (<code>eth0</code>) only, and enforcement is unreliable for standalone pods with no <code>metadata.ownerReferences</code> — everything here is Deployment-, StatefulSet- or Job-owned, so that one is already satisfied. Separately, the <code>0.0.0.0/0</code> ipBlock on litellm and worker stops meaning “k3d’s <code>10.42.0.0/16</code> plus the internet” and starts meaning your entire VPC. Narrow it to a real destination CIDR once the network layer exists.</li>
+      <li><strong>Don’t make NetworkPolicy the only control.</strong> It governs east-west pod-to-pod traffic and nothing else. Security groups for pods govern what the pod reaches in the VPC and beyond, and AWS supports running both together. For a tier holding prompts and completions, the pairing worth having is this file for in-cluster traffic plus a pod security group that stops web and worker reaching anywhere in the VPC they have no business in.</li>
       <li><strong><code>kubectl port-forward</code> stops being the way in.</strong> A real Ingress brings back the Traefik-equivalent rule, the host name, and a <code>NEXTAUTH_URL</code> that has to match what the browser actually types.</li>
     </ul>
   </section>

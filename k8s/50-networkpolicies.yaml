@@ -256,6 +256,15 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: a-game-worker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-web
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-worker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-create-lang-db
       ports:
         - protocol: TCP
           port: 5432
@@ -283,6 +292,12 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: a-game-brain
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-web
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-worker
       ports:
         - protocol: TCP
           port: 6379
@@ -338,6 +353,13 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-web
+      ports:
+        - protocol:
+          port: 3000
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

@@ -1,0 +1,192 @@
+###### Ingress ######
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-lang-web
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-lang-web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-litellm
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-lang-minio
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-lang-minio
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-web
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-worker
+      ports:
+        - protocol: TCP
+          port: 9000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-lang-clickhouse
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-lang-clickhouse
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-web
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-worker
+      ports:
+        - protocol: TCP
+          port: 8123
+        - protocol: TCP
+          port: 9000
+---
+
+
+###### Egress ######
+
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-lang-web-egress
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-lang-web
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-minio
+      ports:
+        - protocol: TCP
+          port: 9000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-clickhouse
+      ports:
+        - protocol: TCP
+          port: 8123
+        - protocol: TCP
+          port: 9000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-lang-worker-egress
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-lang-worker
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-minio
+      ports:
+        - protocol: TCP
+          port: 9000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-lang-clickhouse
+      ports:
+        - protocol: TCP
+          port: 8123
+        - protocol: TCP
+          port: 9000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-create-lang-db-egress
+  namespace: a-game
+  labels:
+    app.kubernetes.io/part-of: a-game
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: a-game-create-lang-db
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: a-game-postgres
+      ports:
+        - protocol: TCP
+          port: 5432

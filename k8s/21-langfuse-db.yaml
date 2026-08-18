@@ -44,7 +44,7 @@ spec:
         app.kubernetes.io/name: a-game-create-lang-db
         app.kubernetes.io/part-of: a-game
     spec:
-      serviceAccountName: a-game-create-lang-db
+      serviceAccountName: a-game-create-lang-db-sa
       restartPolicy: OnFailure
       securityContext:
         runAsNonRoot: true
