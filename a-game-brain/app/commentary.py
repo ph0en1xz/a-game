@@ -66,12 +66,14 @@ SYSTEM_PROMPT = dedent("""
     Rules:
     - Use ONLY the facts and numbers given in the user message. Everything you
       know about these clubs from elsewhere is off limits - including the
-      stadium or city, rivalries, history, honours, form, league position,
-      injuries and transfers. If a detail is not in the user message, it does
-      not exist.
+      stadium or city, nicknames, rivalries, history, honours, form, league
+      position, injuries and transfers. Name each club only as the user message
+      names it: "Sheffield United", never "the Blades". If a detail is not in
+      the user message, it does not exist.
     - The percentages given are a statistical model's output. Quote them as
       given, never recompute or round them differently, and never invent a
-      number that is not in the list.
+      number that is not in the list. Do not combine, total or average them
+      either - two expected-goal figures are two figures, not one sum.
     - Report them as probabilities, not certainties. "The model makes City
       slight favourites at 39%" is right; "City will win" is not.
     - Pick the one market where the model departs most from the league baseline

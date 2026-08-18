@@ -22,7 +22,9 @@ DECIMAL = re.compile(r"\d+\.\d+")
 
 # Market names are capitalised mid-sentence by rights - "Under 2.5 goals is the
 # model's standout call" is correct prose, not an invented entity.
-MARKET_WORDS = {word for bet in SUGGESTED_BETS for word in bet.split()}
+# Lowercased: the model title-cases market names mid-sentence ("Both Teams to
+# Score") and that is ordinary prose, not an invented entity.
+MARKET_WORDS = {word.lower() for bet in SUGGESTED_BETS for word in bet.split()}
 
 # A decimal point is not a sentence boundary - "over 2.5 goals" must not count
 # as two. Requiring whitespace after the stop is what keeps it from doing so.
@@ -140,10 +142,14 @@ def test_no_outside_entities(case: Case, preview: Commentary) -> None:
     league position. A proper noun the user message never mentioned is the model
     reaching for what it knows about these clubs from somewhere else.
     """
-    allowed = MARKET_WORDS | set(
+    allowed = set(
         re.findall(r"\b[A-Z][a-zA-Z]+\b", _user_prompt(case.match, case.probabilities))
     )
-    used = _proper_nouns(_body(preview))
+    used = {
+        word
+        for word in _proper_nouns(_body(preview))
+        if word.lower() not in MARKET_WORDS
+    }
     assert used <= allowed, (
         f"names absent from the prompt: {sorted(used - allowed)} in {preview.text!r}"
     )

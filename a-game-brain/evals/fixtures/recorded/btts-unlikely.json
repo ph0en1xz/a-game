@@ -1,8 +1,8 @@
 {
   "arguments": {
-    "text": "Crystal Palace are slight favourites in this Matchday 8 fixture, with the model making them 49% to win compared to Sheffield United's 25% chance of an away victory. The standout feature here is the expected goal difference, with Palace projected at 1.62 xG to the Blades' 0.62, suggesting a one-sided contest. The most likely scoreline is a 1-0 Palace win at 16%, though both teams failing to score is heavily favoured at 76%.",
+    "text": "Crystal Palace FC are slight favourites against Sheffield United FC, with the model making them 49% to win compared to the league baseline of 45%. The model is notably more cautious about both teams scoring, rating that prospect at just 24% against a league baseline of 48%, suggesting it expects a relatively tight contest. Palace's expected goals of 1.62 dwarf Sheffield United's 0.62, with 1-0 the most likely outcome at 16%.",
     "suggested_bet": "Both teams to score - no",
-    "suggested_bet_reason": "The model forecasts both teams to score at just 24%, well below the 48% league baseline, reflecting Palace's attacking dominance and Sheffield United's limited expected output."
+    "suggested_bet_reason": "The model rates both teams to score at 24%, a significant 24-percentage-point departure below the league baseline of 48%."
   },
   "model": "anthropic/claude-haiku-4-5-20251001"
 }

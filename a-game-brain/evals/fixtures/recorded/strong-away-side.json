@@ -1,8 +1,8 @@
 {
   "arguments": {
-    "text": "Arsenal are heavy favourites in this matchday 6 fixture, with the model making the away win 51% likely compared to a league baseline of just 28%. Southampton's expected goals of 0.96 suggest limited attacking threat, while Arsenal's 1.92 xG indicates they should dominate chances. The model leans toward a low-scoring Arsenal victory, with 0-2 the single most likely scoreline at 11%.",
+    "text": "Arsenal are strong favourites to win this fixture, with the model making them 51% to claim all three points compared to a league baseline of 28% for away wins. Southampton's chances are significantly diminished at just 24%, well below the 45% home baseline, while the teams are closely matched on a draw at 25% versus 27% baseline. The model expects an Arsenal-dominated affair, with their expected goals of 1.92 nearly double Southampton's 0.96, and the most likely scorelines all feature away victories.",
     "suggested_bet": "Away win",
-    "suggested_bet_reason": "The model makes Arsenal strong favourites at 51% away win, departing significantly from the 28% league baseline for away victories."
+    "suggested_bet_reason": "The model makes Arsenal 51% to win compared to the 28% league baseline for away victories, representing the largest departure from baseline across all markets."
   },
   "model": "anthropic/claude-haiku-4-5-20251001"
 }
