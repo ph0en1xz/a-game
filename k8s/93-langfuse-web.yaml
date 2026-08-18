@@ -49,7 +49,8 @@ spec:
                 name: langfuse-credentials
             - secretRef:
                 name: langfuse-web-secrets
-          env:        
+          env:     
+            - { name: HOSTNAME, value: "0.0.0.0" }   # allow access from outside the cluster
             - { name: NEXTAUTH_URL, value: http://localhost:3000 }
             - { name: CLICKHOUSE_URL, value: http://a-game-lang-clickhouse:8123 }
             - { name: CLICKHOUSE_MIGRATION_URL, value: clickhouse://a-game-lang-clickhouse:9000 }

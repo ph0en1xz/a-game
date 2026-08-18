@@ -257,18 +257,102 @@ docker compose up -d
 
 # cluster
 k3d cluster create a-game
-kubectl apply -f k8s/
+kubectl apply -f k8s/00-namespace.yaml
 ```
 
-Secrets are created imperatively and never committed:
+### Secrets — create these before `kubectl apply -f k8s/`
+
+Nothing in `k8s/` creates a Secret. They're made imperatively and never committed, so the
+manifests reference ten Secrets that must already exist in the `a-game` namespace. Apply the
+manifests without them and pods sit in `CreateContainerConfigError` naming the missing key —
+which is a clearer failure than most, but only if you know to look for it.
+
+**Key names matter as much as Secret names.** Most are consumed with `envFrom`, so every key
+becomes an environment variable verbatim and a typo'd key is silently absent rather than an error.
+
+| Secret | Keys | Used by |
+|---|---|---|
+| `db-credentials` | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | postgres, api, brain, worker, and the Langfuse bootstrap Job (as the superuser) |
+| `rabbitmq-credentials` | `RABBITMQ_DEFAULT_USER`, `RABBITMQ_DEFAULT_PASS` | rabbitmq, brain, worker |
+| `sports-api-credentials` | `SPORTS_API_KEY` | worker — your football-data.org key |
+| `anthropic-credentials` | `ANTHROPIC_API_KEY` | litellm only. The brain never receives it |
+| `openai-credentials` | `OPENAI_API_KEY` | litellm only, for the fallback model |
+| `minio-credentials` | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | minio, langfuse web + worker |
+| `clickhouse-credentials` | `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD` | clickhouse, langfuse web + worker |
+| `lang-db-credentials` | `PGUSER`, `PGPASSWORD` | the `langfuse` Postgres role — created by the bootstrap Job, then used by langfuse web + worker |
+| `langfuse-credentials` | `SALT`, `ENCRYPTION_KEY` | langfuse web + worker. Must be **byte-identical** across both |
+| `langfuse-web-secrets` | `NEXTAUTH_SECRET`, `LANGFUSE_INIT_ORG_ID`, `LANGFUSE_INIT_PROJECT_ID`, `LANGFUSE_INIT_PROJECT_PUBLIC_KEY`, `LANGFUSE_INIT_PROJECT_SECRET_KEY`, `LANGFUSE_INIT_USER_EMAIL`, `LANGFUSE_INIT_USER_PASSWORD` | langfuse web. The two `PROJECT_*_KEY` values are also read by litellm to send traces |
+
+The application secrets:
 
 ```bash
+kubectl create secret generic db-credentials -n a-game \
+  --from-literal=POSTGRES_USER='postgres' \
+  --from-literal=POSTGRES_PASSWORD='<choose one>' \
+  --from-literal=POSTGRES_DB='a_game_db'
+
+kubectl create secret generic rabbitmq-credentials -n a-game \
+  --from-literal=RABBITMQ_DEFAULT_USER='<choose one>' \
+  --from-literal=RABBITMQ_DEFAULT_PASS='<choose one>'
+
 kubectl create secret generic sports-api-credentials -n a-game \
   --from-literal=SPORTS_API_KEY='<your football-data.org key>'
 
 kubectl create secret generic anthropic-credentials -n a-game \
   --from-literal=ANTHROPIC_API_KEY='<your Anthropic key>'
+
+kubectl create secret generic openai-credentials -n a-game \
+  --from-literal=OPENAI_API_KEY='<your OpenAI key>'
 ```
+
+The Langfuse observability stack. `ENCRYPTION_KEY` must be 32 bytes of hex; `SALT` and
+`NEXTAUTH_SECRET` 32 bytes of base64 — Langfuse rejects anything else at boot:
+
+```bash
+kubectl create secret generic minio-credentials -n a-game \
+  --from-literal=MINIO_ROOT_USER='<choose one>' \
+  --from-literal=MINIO_ROOT_PASSWORD='<choose one, min 8 chars>'
+
+kubectl create secret generic clickhouse-credentials -n a-game \
+  --from-literal=CLICKHOUSE_USER='default' \
+  --from-literal=CLICKHOUSE_PASSWORD='<choose one>'
+
+kubectl create secret generic lang-db-credentials -n a-game \
+  --from-literal=PGUSER='langfuse' \
+  --from-literal=PGPASSWORD='<choose one>'
+
+kubectl create secret generic langfuse-credentials -n a-game \
+  --from-literal=SALT="$(openssl rand -base64 32)" \
+  --from-literal=ENCRYPTION_KEY="$(openssl rand -hex 32)"
+
+kubectl create secret generic langfuse-web-secrets -n a-game \
+  --from-literal=NEXTAUTH_SECRET="$(openssl rand -base64 32)" \
+  --from-literal=LANGFUSE_INIT_ORG_ID='a-game' \
+  --from-literal=LANGFUSE_INIT_PROJECT_ID='a-game' \
+  --from-literal=LANGFUSE_INIT_PROJECT_PUBLIC_KEY='<choose one>' \
+  --from-literal=LANGFUSE_INIT_PROJECT_SECRET_KEY='<choose one>' \
+  --from-literal=LANGFUSE_INIT_USER_EMAIL='<your email>' \
+  --from-literal=LANGFUSE_INIT_USER_PASSWORD='<choose one, min 8 chars>'
+```
+
+`CLICKHOUSE_USER` should stay `default` — Langfuse runs its schema migrations as that user, and a
+restricted one fails at migration time rather than at connect time. `LANGFUSE_INIT_PROJECT_*_KEY`
+are values you pick; Langfuse provisions the org, project, user and API key pair on first boot,
+which is why no key generation step exists.
+
+Then apply the rest:
+
+```bash
+kubectl apply -f k8s/
+```
+
+Order matters within `k8s/` too — the numeric prefixes are the apply order. `10-serviceaccounts.yaml`
+must land before any workload that names a ServiceAccount, and `21-langfuse-db.yaml` (the Job that
+creates the `langfuse` role and database) must **complete** before `93`/`94` start, since Langfuse
+runs migrations against that database on boot.
+
+On EKS these become AWS Secrets Manager entries synced by External Secrets Operator. The manifests
+don't change — they reference a Secret object either way.
 
 Apply the schema, in order — the files are numbered for foreign-key dependencies:
 
