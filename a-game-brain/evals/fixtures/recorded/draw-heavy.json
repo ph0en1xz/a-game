@@ -1,8 +1,8 @@
 {
   "arguments": {
-    "text": "Brentford and Fulham meet on Saturday with the model suggesting a tight contest and a low-scoring affair. The standout feature is the prevalence of draws - at 44%, the model makes a stalemate 17 percentage points more likely than the league baseline of 27%. Both teams have similar attacking potential, with Brentford expected to generate 1.18 goals and Fulham 1.09, but the most likely outcome is a 1-1 draw at 19%.",
+    "text": "Brentford and Fulham meet in a fixture where the model makes draws slight favourites at 44%, well above the league baseline of 27%, suggesting a cagey encounter. Both teams are expected to create relatively few chances, with Brentford's expected goals at 1.18 and Fulham's at 1.09, underpinning the model's lean towards Under 2.5 goals at 56%. The most likely outcome is a 1-1 draw at 19%, followed by a goalless draw at 12%, indicating the model expects a low-scoring stalemate.",
     "suggested_bet": "Draw",
-    "suggested_bet_reason": "The model rates a draw at 44%, significantly above the league baseline of 27%, representing the biggest departure from typical expectations."
+    "suggested_bet_reason": "The model makes draws 44% probable, departing significantly from the league baseline of 27%, representing its strongest conviction."
   },
   "model": "anthropic/claude-haiku-4-5-20251001"
 }

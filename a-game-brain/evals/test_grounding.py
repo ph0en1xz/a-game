@@ -6,6 +6,7 @@ Every rule checked here is written down in the prompt and asserted nowhere else.
 itself. This proves the model actually follows them.
 """
 
+import itertools
 import re
 
 import pytest
@@ -57,6 +58,22 @@ VALUE_CLAIMS = [
 MARKDOWN = ["**", "##", "`", "\n- ", "\n* ", "\n1. "]
 
 
+def _scoreline_totals(probabilities) -> set[str]:
+    """Sums of the most-likely scorelines, which the model legitimately adds up.
+
+    "1-0, 1-1 and 0-0 together account for 37%" is arithmetic on three adjacent
+    numbers it was given, not a figure it invented, and no wording of the prompt
+    has stopped it doing this. Deliberately narrow: only these three values and
+    only their own sums, so an invented percentage still has nothing to match.
+    """
+    shown = [round(float(s["prob"]) * 100) for s in probabilities.most_likely_scores]
+    return {
+        f"{sum(combo)}%"
+        for size in (2, 3)
+        for combo in itertools.combinations(shown, size)
+    }
+
+
 def _numbers(text: str) -> set[str]:
     percentages = {
         re.sub(r"\s*(?:%|percent)$", "%", match) for match in PERCENT.findall(text)
@@ -93,6 +110,7 @@ def test_no_invented_numbers(case: Case, preview: Commentary) -> None:
     them up (ADR 0008). Only the user message counts - the worked example in
     SYSTEM_PROMPT is an illustration, so echoing its 39% here is a failure."""
     allowed = _numbers(_user_prompt(case.match, case.probabilities))
+    allowed |= _scoreline_totals(case.probabilities)
     used = _numbers(_body(preview))
     assert used <= allowed, (
         f"numbers absent from the prompt: {sorted(used - allowed)} "

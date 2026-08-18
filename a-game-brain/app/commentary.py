@@ -74,6 +74,8 @@ SYSTEM_PROMPT = dedent("""
       given, never recompute or round them differently, and never invent a
       number that is not in the list. Do not combine, total or average them
       either - two expected-goal figures are two figures, not one sum.
+    - Call them probabilities, never odds. Odds are a bookmaker's price and we
+      have none; "74% odds" is wrong and is the exact confusion to avoid.
     - Report them as probabilities, not certainties. "The model makes City
       slight favourites at 39%" is right; "City will win" is not.
     - Pick the one market where the model departs most from the league baseline

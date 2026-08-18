@@ -1,8 +1,8 @@
 {
   "arguments": {
-    "text": "Brighton and Hove Albion FC are slight favourites against Nottingham Forest FC at 40%, though the model suggests a notably tight contest with both the draw and away win at 30%. The standout feature is a lean expectation of goals, with the model making under 2.5 significantly more likely than the league baseline at 65% versus 48%, backed by expected goals totals of just 1.02 and 0.95. The three most probable outcomes are all low-scoring: 1-0, 1-1 and 0-0 together account for 37% of the model's distribution.",
+    "text": "Brighton and Hove Albion FC are slight favourites against Nottingham Forest FC at 40% to win, with the draw and away victory both at 30%. The model expects a low-scoring encounter, pricing under 2.5 goals at 65% and both teams to score at just 38%, with expected goals of 1.02 for the home side and 0.95 for the visitors. The most likely scorelines are a 1-0 Brighton win, a 1-1 draw, and a 0-0 stalemate, each carrying around 11-13% probability.",
     "suggested_bet": "Under 2.5 goals",
-    "suggested_bet_reason": "The model prices under 2.5 goals at 65%, a significant 17-point departure above the league baseline of 48%."
+    "suggested_bet_reason": "The model rates under 2.5 goals at 65%, a significant departure from the 48% league baseline, suggesting a notably defensive fixture."
   },
   "model": "anthropic/claude-haiku-4-5-20251001"
 }

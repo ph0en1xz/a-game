@@ -1,8 +1,8 @@
 {
   "arguments": {
-    "text": "Manchester City are clear favourites at 49% to win at Leeds United, a significant departure from the league baseline where away sides win only 28% of the time. The model expects a competitive but low-scoring fixture, with City's expected goals of 2.02 substantially outweighing Leeds' 1.21, and the most likely outcomes all featuring away victories. Both teams scoring appears likely at 58%, though the three most probable scorelines all feature City clean sheets, suggesting the hosts may struggle to break through despite their home advantage.",
+    "text": "Manchester City are strong favourites in this fixture, with the model making them 49% to win compared to Leeds United's 27%. The away side's attacking threat is evident in their expected goals advantage of 2.02 to 1.21, and the three most likely scorelines all feature Manchester City victories. Leeds will need to be defensively resolute to prevent the visitors from extending their advantage as the match progresses.",
     "suggested_bet": "Away win",
-    "suggested_bet_reason": "The model gives Manchester City 49% to win away, significantly above the 28% league baseline for away victories."
+    "suggested_bet_reason": "The model makes Manchester City 49% to win, a significant departure from the 28% league baseline for away victories."
   },
   "model": "anthropic/claude-haiku-4-5-20251001"
 }
