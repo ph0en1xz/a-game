@@ -26,6 +26,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # Runs before the cluster because it needs no cluster, so a dangling name
+      # fails in seconds rather than after kind finishes booting. The server
+      # dry-run below cannot catch these: a reference to a ServiceAccount that
+      # nothing creates is valid YAML and applies cleanly.
+      - name: Cross-reference names
+        run: |
+          pip install --quiet pyyaml
+          python3 scripts/check_k8s_refs.py k8s
+
       # A throwaway API server is what makes this worth running. Offline schema
       # linters catch unknown fields, but `policyTypes: [Igress]` is a plain
       # string in the OpenAPI schema — only the real API server rejects it.
