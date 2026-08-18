@@ -1,0 +1,8 @@
+{
+  "arguments": {
+    "text": "Manchester City are strong favourites for this matchday three clash, with the model making them 68% to win compared to the 45% league baseline for home teams. The expected goals suggest a comfortable City victory, with the hosts projected to create significantly more than their opponents. The most likely scorelines all feature City wins, with 2-0 the single most probable outcome at 13%.",
+    "suggested_bet": "Home win",
+    "suggested_bet_reason": "The model makes Manchester City 68% favourites, substantially above the 45% league baseline for home wins."
+  },
+  "model": "anthropic/claude-haiku-4-5-20251001"
+}

@@ -11,6 +11,11 @@
 -- Idempotent: safe to run repeatedly, and safe against an already-populated
 -- database.
 --
+-- Kickoffs are relative to now() rather than literal dates, and the match upsert
+-- refreshes them, so re-running always leaves three played fixtures behind and
+-- three still to come. Hardcoded dates went stale within a fortnight and the
+-- previous DO NOTHING meant re-seeding could never repair them.
+--
 -- Run against the in-cluster Postgres:
 --   kubectl exec -i -n a-game a-game-postgres-0 -- psql -U <user> -d <db> < scripts/seed_dev.sql
 -- User and database come from the db-credentials Secret — the same values brain uses.
@@ -41,15 +46,19 @@ INSERT INTO a_game.match
   (id, season_id, home_team_id, away_team_id, matchday, utc_date, status,
    duration, home_goals, away_goals, home_goals_ht, away_goals_ht, blob) VALUES
   -- Played: goals present, so fulltime_outcome derives to HOME_WIN / AWAY_WIN / DRAW.
-  (500001, 2400, 57, 61, 1, '2026-08-01 14:00:00+00', 'FINISHED', 'REGULAR', 3, 1, 1, 0, '{}'::jsonb),
-  (500002, 2400, 62, 64, 1, '2026-08-01 16:30:00+00', 'FINISHED', 'REGULAR', 0, 2, 0, 1, '{}'::jsonb),
-  (500003, 2400, 66, 73, 1, '2026-08-02 15:00:00+00', 'FINISHED', 'REGULAR', 2, 2, 1, 1, '{}'::jsonb),
+  (500001, 2400, 57, 61, 1, ((current_date - 7) + time '14:00') AT TIME ZONE 'UTC', 'FINISHED', 'REGULAR', 3, 1, 1, 0, '{}'::jsonb),
+  (500002, 2400, 62, 64, 1, ((current_date - 7) + time '16:30') AT TIME ZONE 'UTC', 'FINISHED', 'REGULAR', 0, 2, 0, 1, '{}'::jsonb),
+  (500003, 2400, 66, 73, 1, ((current_date - 6) + time '15:00') AT TIME ZONE 'UTC', 'FINISHED', 'REGULAR', 2, 2, 1, 1, '{}'::jsonb),
   -- Upcoming: goals NULL, so fulltime_outcome stays NULL. These are the preview cases —
   -- two real team names, a real kickoff, and no result for the model to leak.
-  (500004, 2400, 65, 57, 2, '2026-08-08 14:00:00+00', 'SCHEDULED', NULL, NULL, NULL, NULL, NULL, '{}'::jsonb),
-  (500005, 2400, 64, 66, 2, '2026-08-08 16:30:00+00', 'TIMED',     NULL, NULL, NULL, NULL, NULL, '{}'::jsonb),
-  (500006, 2400, 73, 67, 2, '2026-08-09 15:00:00+00', 'SCHEDULED', NULL, NULL, NULL, NULL, NULL, '{}'::jsonb)
-ON CONFLICT (id) DO NOTHING;
+  (500004, 2400, 65, 57, 2, ((current_date + 3) + time '14:00') AT TIME ZONE 'UTC', 'SCHEDULED', NULL, NULL, NULL, NULL, NULL, '{}'::jsonb),
+  (500005, 2400, 64, 66, 2, ((current_date + 3) + time '16:30') AT TIME ZONE 'UTC', 'TIMED',     NULL, NULL, NULL, NULL, NULL, '{}'::jsonb),
+  (500006, 2400, 73, 67, 2, ((current_date + 4) + time '15:00') AT TIME ZONE 'UTC', 'SCHEDULED', NULL, NULL, NULL, NULL, NULL, '{}'::jsonb)
+-- Only the two columns that go stale. Goals stay untouched: these ids sit in a
+-- 5xxxxx block football-data never issues, so nothing real ever overwrites them.
+ON CONFLICT (id) DO UPDATE SET
+  utc_date = EXCLUDED.utc_date,
+  status   = EXCLUDED.status;
 
 COMMIT;
 

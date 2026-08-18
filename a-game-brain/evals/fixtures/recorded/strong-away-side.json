@@ -1,0 +1,8 @@
+{
+  "arguments": {
+    "text": "Arsenal are clear favourites in this Matchday 6 encounter, with the model making them 51% to win compared to Southampton's 24%. The visitors' expected goals advantage of 1.92 to 0.96 suggests they should dominate possession and chances, with the most likely scorelines all featuring an Arsenal victory. Southampton will need a defensive masterclass to get something from this fixture, though a draw at 25% remains possible.",
+    "suggested_bet": "Away win",
+    "suggested_bet_reason": "The model makes Arsenal 51% favourites, a significant departure from the league baseline of 28% for away wins."
+  },
+  "model": "anthropic/claude-haiku-4-5-20251001"
+}

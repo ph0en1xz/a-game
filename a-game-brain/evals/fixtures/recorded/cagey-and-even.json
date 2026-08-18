@@ -1,0 +1,8 @@
+{
+  "arguments": {
+    "text": "Brighton host Nottingham Forest in a matchday 11 encounter where the model expects a tight contest with relatively few goals. Brighton are slight favourites at 40% to win, but the model makes Forest competitive at 30% and suggests a 30% chance of a draw. With expected goals of just 1.02 for the hosts and 0.95 for the visitors, this looks like a low-scoring affair, with 0-0 and 1-0 among the most likely outcomes.",
+    "suggested_bet": "Under 2.5 goals",
+    "suggested_bet_reason": "The model gives Under 2.5 goals at 65%, departing significantly from the league baseline of 48% for over 2.5."
+  },
+  "model": "anthropic/claude-haiku-4-5-20251001"
+}

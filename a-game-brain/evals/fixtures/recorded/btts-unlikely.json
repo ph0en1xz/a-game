@@ -1,0 +1,8 @@
+{
+  "arguments": {
+    "text": "Crystal Palace hold a 49% chance of victory against Sheffield United, with the model making them slight favourites over the league baseline of 45% for home wins. The visitors face a tough task with only a 25% probability of an away win, while a draw is modelled at 26%. Palace's expected goal advantage of 1.62 to 0.62 suggests a one-sided encounter, reflected in the most likely scorelines of 1-0 and 2-0.",
+    "suggested_bet": "Home win",
+    "suggested_bet_reason": "The model rates Crystal Palace at 49% to win compared to the 45% league baseline for home teams."
+  },
+  "model": "anthropic/claude-haiku-4-5-20251001"
+}

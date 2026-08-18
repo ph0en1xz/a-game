@@ -1,0 +1,25 @@
+{
+  "name": "modest-home-edge",
+  "id": 900008,
+  "home_team_id": 563,
+  "away_team_id": 338,
+  "home_team": "West Ham United FC",
+  "away_team": "Leicester City FC",
+  "matchday": 10,
+  "utc_date": "2026-10-24T14:00:00+00:00",
+  "probabilities": {
+    "lambda_home": 1.83,
+    "lambda_away": 0.92,
+    "prob_home": 0.61,
+    "prob_draw": 0.22,
+    "prob_away": 0.17,
+    "over_2_5": 0.49,
+    "btts": 0.47,
+    "most_likely_scores": [
+      {"home": 2, "away": 0, "prob": 0.13},
+      {"home": 1, "away": 0, "prob": 0.12},
+      {"home": 2, "away": 1, "prob": 0.11}
+    ]
+  },
+  "expected_bet": "Home win"
+}

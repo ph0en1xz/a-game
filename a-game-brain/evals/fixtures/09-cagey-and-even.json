@@ -1,0 +1,25 @@
+{
+  "name": "cagey-and-even",
+  "id": 900009,
+  "home_team_id": 397,
+  "away_team_id": 351,
+  "home_team": "Brighton and Hove Albion FC",
+  "away_team": "Nottingham Forest FC",
+  "matchday": 11,
+  "utc_date": "2026-10-31T15:00:00+00:00",
+  "probabilities": {
+    "lambda_home": 1.02,
+    "lambda_away": 0.95,
+    "prob_home": 0.4,
+    "prob_draw": 0.3,
+    "prob_away": 0.3,
+    "over_2_5": 0.35,
+    "btts": 0.38,
+    "most_likely_scores": [
+      {"home": 1, "away": 0, "prob": 0.13},
+      {"home": 1, "away": 1, "prob": 0.13},
+      {"home": 0, "away": 0, "prob": 0.11}
+    ]
+  },
+  "expected_bet": "Under 2.5 goals"
+}

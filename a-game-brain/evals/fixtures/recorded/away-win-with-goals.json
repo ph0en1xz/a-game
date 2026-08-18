@@ -1,0 +1,8 @@
+{
+  "arguments": {
+    "text": "Manchester City are strong favourites in this matchday 12 fixture, with the model making them 49% to win compared to Leeds' 27%. The model expects a relatively open game with both teams likely to score at 58%, and a high-scoring encounter at 60% for over 2.5 goals, though City's expected goals advantage of 2.02 to 1.21 suggests they should dominate possession and chances. The most likely outcomes are City wins by one or two goals, with 0-2 and 1-2 both at 9% probability.",
+    "suggested_bet": "Away win",
+    "suggested_bet_reason": "The model rates Manchester City at 49% to win, a significant 21-percentage-point departure above the 28% league baseline for away victories."
+  },
+  "model": "anthropic/claude-haiku-4-5-20251001"
+}

@@ -1,0 +1,25 @@
+{
+  "name": "btts-unlikely",
+  "id": 900006,
+  "home_team_id": 354,
+  "away_team_id": 356,
+  "home_team": "Crystal Palace FC",
+  "away_team": "Sheffield United FC",
+  "matchday": 8,
+  "utc_date": "2026-10-03T14:00:00+00:00",
+  "probabilities": {
+    "lambda_home": 1.62,
+    "lambda_away": 0.62,
+    "prob_home": 0.49,
+    "prob_draw": 0.26,
+    "prob_away": 0.25,
+    "over_2_5": 0.5,
+    "btts": 0.24,
+    "most_likely_scores": [
+      {"home": 1, "away": 0, "prob": 0.16},
+      {"home": 2, "away": 0, "prob": 0.13},
+      {"home": 0, "away": 0, "prob": 0.1}
+    ]
+  },
+  "expected_bet": "Both teams to score - no"
+}

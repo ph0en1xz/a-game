@@ -1,0 +1,25 @@
+{
+  "name": "heavy-home-favourite",
+  "id": 900001,
+  "home_team_id": 65,
+  "away_team_id": 349,
+  "home_team": "Manchester City FC",
+  "away_team": "Ipswich Town FC",
+  "matchday": 3,
+  "utc_date": "2026-08-29T14:00:00+00:00",
+  "probabilities": {
+    "lambda_home": 2.15,
+    "lambda_away": 0.78,
+    "prob_home": 0.68,
+    "prob_draw": 0.19,
+    "prob_away": 0.13,
+    "over_2_5": 0.58,
+    "btts": 0.45,
+    "most_likely_scores": [
+      {"home": 2, "away": 0, "prob": 0.13},
+      {"home": 1, "away": 0, "prob": 0.11},
+      {"home": 2, "away": 1, "prob": 0.1}
+    ]
+  },
+  "expected_bet": "Home win"
+}

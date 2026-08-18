@@ -1,0 +1,8 @@
+{
+  "arguments": {
+    "text": "Newcastle host Aston Villa in a match where the model makes the away side slight favourites, rating Aston Villa's chances at 35% compared to the league baseline of 28%. The model expects a competitive encounter with both teams likely to score at 72%, well above the 48% baseline, and over 2.5 goals at 57%. The expected goal tallies of 1.74 for Newcastle and 1.58 for Villa suggest an open contest, with the most likely scoreline a 2-1 home win at 10%.",
+    "suggested_bet": "Both teams to score",
+    "suggested_bet_reason": "The model rates both teams to score at 72%, significantly above the league baseline of 48%."
+  },
+  "model": "anthropic/claude-haiku-4-5-20251001"
+}

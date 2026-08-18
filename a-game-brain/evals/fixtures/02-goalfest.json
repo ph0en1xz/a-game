@@ -1,0 +1,25 @@
+{
+  "name": "goalfest",
+  "id": 900002,
+  "home_team_id": 64,
+  "away_team_id": 61,
+  "home_team": "Liverpool FC",
+  "away_team": "Chelsea FC",
+  "matchday": 4,
+  "utc_date": "2026-09-05T16:30:00+00:00",
+  "probabilities": {
+    "lambda_home": 2.34,
+    "lambda_away": 1.71,
+    "prob_home": 0.52,
+    "prob_draw": 0.21,
+    "prob_away": 0.27,
+    "over_2_5": 0.74,
+    "btts": 0.61,
+    "most_likely_scores": [
+      {"home": 2, "away": 1, "prob": 0.09},
+      {"home": 3, "away": 1, "prob": 0.07},
+      {"home": 2, "away": 2, "prob": 0.07}
+    ]
+  },
+  "expected_bet": "Over 2.5 goals"
+}
