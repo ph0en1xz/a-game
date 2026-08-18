@@ -160,12 +160,15 @@ def _user_prompt(match: Match, probabilities: ScoreProbabilities) -> str:
         - Draw: {probabilities.prob_draw:.0%}
         - Away win: {probabilities.prob_away:.0%}
         - Over 2.5 goals: {probabilities.over_2_5:.0%}
+        - Under 2.5 goals: {1 - probabilities.over_2_5:.0%}
         - Both teams to score: {probabilities.btts:.0%}
+        - Both teams to score - no: {1 - probabilities.btts:.0%}
         - Expected goals: {probabilities.lambda_home:.2f} home, {probabilities.lambda_away:.2f} away
         - Most likely scorelines: {scores}
 
         League baselines for comparison: home win 45%, draw 27%, away win 28%,
-        over 2.5 goals 52%, both teams to score 48%.
+        over 2.5 goals 52%, under 2.5 goals 48%, both teams to score 48%,
+        both teams to score - no 52%.
     """).strip()
 
 

@@ -1,8 +1,8 @@
 {
   "arguments": {
-    "text": "Burnley and Everton meet in a fixture where the model expects a tight, low-scoring contest. The most likely outcome is a stalemate at 17 percent, with Burnley slight favourites at 38 percent for a home win. Both teams are projected for relatively modest attacking output, with Burnley averaging 0.94 expected goals and Everton 0.81, suggesting this will be a cagey affair.",
+    "text": "Burnley are slight favourites against Everton at 38%, though this is well below the league baseline for home wins. The model expects a low-scoring affair, with under 2.5 goals heavily favoured at 71% compared to the 48% league baseline. With expected goals of 0.94 for Burnley and 0.81 for Everton, the most likely outcome is a goalless draw at 17%, followed by a 1-0 Burnley win at 13%.",
     "suggested_bet": "Under 2.5 goals",
-    "suggested_bet_reason": "The model makes Under 2.5 goals 71 percent likely, a significant departure from the league baseline of 48 percent for over 2.5."
+    "suggested_bet_reason": "The model projects under 2.5 goals at 71%, a significant departure from the 48% league baseline."
   },
   "model": "anthropic/claude-haiku-4-5-20251001"
 }

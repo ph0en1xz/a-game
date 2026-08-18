@@ -1,8 +1,8 @@
 {
   "arguments": {
-    "text": "West Ham are modelled as strong favourites at 61% to beat Leicester, a substantial departure from the league baseline of 45% for home wins. The model's expected goals tally of 1.83 to 0.92 reflects a significant attacking advantage for the hosts, with 2-0 the most probable scoreline at 13%. Under 2.5 goals is the model's standout call, backing a lower-scoring affair than the league average.",
-    "suggested_bet": "Under 2.5 goals",
-    "suggested_bet_reason": "The model assigns Under 2.5 goals 51% probability, departing notably from the 52% league baseline for Over 2.5 goals."
+    "text": "West Ham are made strong favourites by the model at 61%, a significant departure from the league baseline of 45% for home wins. Leicester arrive as substantial underdogs at just 17%, with the draw given a 22% probability. The model expects a relatively low-scoring affair, favouring under 2.5 goals at 51%, and suggests both teams scoring is less likely than not at 47%.",
+    "suggested_bet": "Home win",
+    "suggested_bet_reason": "The model makes West Ham 61% favourites compared to the 45% league baseline for home wins, a 16-percentage-point departure."
   },
   "model": "anthropic/claude-haiku-4-5-20251001"
 }

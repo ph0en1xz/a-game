@@ -1,8 +1,8 @@
 {
   "arguments": {
-    "text": "Liverpool face Chelsea in a matchday 4 fixture with the model making the hosts slight favourites at 52% to win, compared to Chelsea's 27% chances. The standout feature of this match is the expectation of goals, with the model backing over 2.5 goals at 74%, a significant departure from the league baseline of 52%. Both teams are expected to score in 61% of simulations, and Liverpool's expected goals advantage of 2.34 to 1.71 suggests they should control much of the play.",
+    "text": "Liverpool are favoured to win this matchday 4 encounter against Chelsea, with the model making them slight favourites at 52% compared to Chelsea's 27% chance of victory. The standout feature of this fixture is the expected goal-heavy nature of the contest, with the model projecting 2.34 expected goals for Liverpool and 1.71 for Chelsea. The most likely scoreline is a Liverpool 2-1 win, though the model also rates 3-1 and 2-2 as plausible outcomes.",
     "suggested_bet": "Over 2.5 goals",
-    "suggested_bet_reason": "The model estimates 74% probability for over 2.5 goals, well above the league baseline of 52%."
+    "suggested_bet_reason": "The model rates Over 2.5 goals at 74%, significantly above the 52% league baseline, suggesting a higher-scoring contest than typical."
   },
   "model": "anthropic/claude-haiku-4-5-20251001"
 }

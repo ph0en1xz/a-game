@@ -1,8 +1,8 @@
 {
   "arguments": {
-    "text": "Brentford and Fulham meet in a local encounter where the model sees a tight contest. With the home side given just 30% to win against the baseline of 45%, this fixture looks set to be cagey, with draws heavily favoured at 44% compared to the league average of 27%. Both teams are expected to create relatively little, with Brentford averaging 1.18 expected goals and Fulham 1.09, suggesting a low-scoring affair where 1-1 emerges as the most likely outcome at 19%.",
+    "text": "Brentford and Fulham meet at the start of matchday 7 in what the model expects to be a cagey affair. The statistical output suggests a draw is the most likely outcome at 44%, with Brentford slight favourites for the win at 30% compared to Fulham's 26%. The model leans heavily towards a low-scoring contest, with under 2.5 goals at 56% and both teams to score at 46%, with the most probable scoreline being a 1-1 draw.",
     "suggested_bet": "Draw",
-    "suggested_bet_reason": "The model makes draws 17 percentage points more likely at 44% than the league baseline of 27%, representing its strongest departure."
+    "suggested_bet_reason": "The model makes draws 17 percentage points more likely than the league baseline at 44%, a significant departure from the typical 27% baseline."
   },
   "model": "anthropic/claude-haiku-4-5-20251001"
 }
