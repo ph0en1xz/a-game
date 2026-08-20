@@ -239,6 +239,9 @@ Not done:
 - The predictions half of the schema isn't modelled yet
 - CI exists for the three services but is unproven; the Terraform plan job from
   [ADR 0006](docs/adr/0006-cicd-github-actions-gitops-later.md) isn't built
+- GitOps is in progress — the `argocd` namespace manifest exists, but Argo CD isn't installed and
+  no `Application` is defined yet. The install steps under Running it locally are instructions,
+  not a description of a running system
 - No metrics, logs or alerting
 - Nothing has run on real AWS yet
 - No auth on the API
@@ -377,6 +380,59 @@ kubectl create job --from=cronjob/a-game-worker worker-manual-1 -n a-game
 kubectl logs -n a-game job/worker-manual-1 -f
 ```
 
+### GitOps — Argo CD
+
+Argo CD reconciles `k8s/` against the cluster, so Git becomes the source of truth instead of
+whatever was last applied by hand. It lives in its own `argocd` namespace and its manifests are in
+`k8s/argocd/`.
+
+Install it, pinned — `stable` moves, and you want the same bytes next time:
+
+```bash
+kubectl apply -f k8s/argocd/01-argocd-namespace.yaml
+kubectl apply -n argocd --server-side --force-conflicts \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.1/manifests/install.yaml
+```
+
+`--server-side` is not optional. The install manifest is large enough that a client-side apply
+overflows the `last-applied-configuration` annotation on some of the CRDs, and server-side apply is
+what upstream tests against.
+
+There's an `manifests/ha/install.yaml` variant too. Skip it — HA runs Redis as a three-node cluster
+plus extra replicas of every component, which on a single k3d node costs real memory and buys
+availability you'd never observe.
+
+Seven workloads come up: `application-controller` (a StatefulSet), `applicationset-controller`,
+`dex-server`, `notifications-controller`, `redis`, `repo-server`, and `server`. Budget roughly
+400–500Mi. The controller is usually last to settle.
+
+To reach the UI, port-forward `svc/argocd-server` — its service port is 443, and pick something
+other than 8080 locally because the ingress already holds that. The initial admin password is in a
+Secret called `argocd-initial-admin-secret` under key `password`. Change the password, then delete
+that Secret; it's meant to be transient.
+
+**Sync settings, and why they start conservative.** The first `Application` points at `path: k8s/`
+on `main` with no `syncPolicy` block at all, which means manual sync, no prune, no self-heal. Prune
+lets Argo CD delete anything on the cluster that isn't in Git — the right end state, and the wrong
+thing to have enabled during the first sync, when the diff still contains drift you haven't looked
+at. Self-heal reverts manual changes automatically, which will silently undo a `kubectl edit` and
+cost you an hour wondering why. Turn both on together, after the first few syncs are boring.
+
+**`k8s/` is not synced recursively, and that's deliberate.** Argo CD defaults to non-recursive
+directory scanning, so an Application on `k8s/` sees the numbered manifests and skips the
+subdirectories — including `k8s/test/nginx.yaml`, which you do not want in the cluster. The same
+non-recursion applies in `ci-k8s-manifests.yml`: both Python checkers glob `*.yaml` in one
+directory and the dry-run has no `-R`, so anything under `k8s/argocd/` needs its own explicit
+invocation in that workflow or it ships unvalidated.
+
+**Argo CD is the one thing that can't be installed by Argo CD.** You bootstrap it with `kubectl
+apply`, and only then can it manage everything else — itself included, via an app-of-apps root.
+That chicken-and-egg step is expected. Committing the upstream `install.yaml` into `k8s/argocd/`
+rather than applying it from the URL is what makes the self-management half honest.
+
+Once Argo CD is running and syncing, `kubectl apply -f k8s/` is drift, not deployment. That's the
+whole point, but it is a real change to how you work day to day.
+
 ## Layout
 
 ```
@@ -384,6 +440,7 @@ a-game-api/         FastAPI read API
 a-game-brain/       prediction engine + model narration
 a-game-worker/      the worker CronJob, plus the schema DDL in postgres/
 k8s/                manifests, applied in numeric order
+k8s/argocd/         Argo CD install and Application manifests
 infrastructure/     Terraform, layered: network → cluster → app
 .github/workflows/  CI per service, plus manifest validation
 docs/adr/           why things are the way they are
