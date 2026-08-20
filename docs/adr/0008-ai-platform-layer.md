@@ -1,6 +1,6 @@
 # ADR 0008 — AI platform layer: gateway, observability, evals, RAG, orchestration
 
-- **Status:** Accepted — **amended 2026-07-30, 2026-08-04, 2026-08-05** (see §Amendments)
+- **Status:** Accepted — **amended 2026-07-30, 2026-08-04, 2026-08-05, 2026-08-19** (see §Amendments)
 - **Date:** 2026-07-22
 - **Amends:** ADR 0005 — its precompute pipeline stands, but the calc service no longer calls
   the Anthropic API directly (§Decision 1 below); the Claude call now goes through an
@@ -55,7 +55,12 @@ the Terraform infra track (network → cluster → app) completes.
 4. **pgvector RAG grounding.** Enable the `vector` extension on the existing Postgres;
    retrieve similar historical matches to ground each Haiku preview instead of free-
    generating. Demonstrates the retrieval-infra pattern with no new datastore.
-5. **Workflow orchestration — Argo Workflows.** Adds retries, backfills, and a run UI to the
+<!-- WITHDRAWN 2026-08-19: item 5 is not being built. The A-vs-B fork below is closed
+     unresolved — neither branch was chosen. See §Amendments (2026-08-19). Text kept for
+     the record; do not implement. -->
+5. ~~**Workflow orchestration — Argo Workflows.**~~ **WITHDRAWN 2026-08-19 — replaced by
+   Argo CD (GitOps), a different product. See §Amendments.** Original text: Adds retries,
+   backfills, and a run UI to the
    daily pipeline. **Open design fork, to settle when Tier 2 starts** — the current pipeline
    is event-driven (a daily CronJob runs ingestion; ingestion publishes a change-gated
    RabbitMQ "data ready" event; the calc service is a long-running consumer that reacts). Argo
@@ -361,3 +366,39 @@ the counterweight. The local model adds real laptop RAM pressure next to ClickHo
 nondeterministic loop to a deliberately deterministic system; the iteration cap and Langfuse
 traces are the containment, and the agent stays out of the daily pipeline until its traces have
 been read.
+
+### 2026-08-19 — Tier 2 item 5 withdrawn: Argo **CD**, not Argo **Workflows**
+
+**Decision.** Argo Workflows is **withdrawn**. It is not deferred and not parked — it is not being
+built. The roadmap adopts **Argo CD (GitOps)** instead, which is a different product solving a
+different problem: Argo CD reconciles cluster state against Git; Argo Workflows is a DAG/step
+engine that runs *as* a workload. Argo CD's home is ADR 0006, amended the same day.
+
+**Why the fork was closed rather than chosen.** Both branches of item 5's A-vs-B fork are weak
+against this pipeline:
+
+- **(A) Scheduler only —** stands up a controller to replace one CronJob firing once daily at
+  06:00 UTC. The operational cost buys almost no signal.
+- **(B) Full DAG —** bigger orchestration signal, but it strips RabbitMQ of its trigger role and
+  dismantles the event-driven decoupling ADR 0005/0007 deliberately built. That trades a sound
+  architecture for a resume line.
+
+Argo Workflows earns its keep with fan-out, heterogeneous retries, and backfills across a large
+date range. This pipeline is ingest → calc → store, once a day, change-gated. That is not a DAG
+problem.
+
+**What is lost, stated plainly.** "Workflow orchestration" leaves the demonstrated surface this
+ADR's Context enumerates. Accepted: a change-gated event-driven pipeline plus GitOps delivery is
+still an orchestration story, just not an Airflow-shaped one. Argo CD is also the more commonly
+demanded platform skill, and it is *additive* — it changes how manifests reach the cluster, not
+what runs, so nothing in ADR 0005/0007 has to be rethought.
+
+**Revisit trigger.** If the DAG signal is wanted later, **pgvector RAG ingestion** (chunk → embed
+→ upsert, fanning out over many matches) is a far more natural host than the match pipeline.
+Reopen the item there, not here.
+
+**Roadmap position.** Execution order set by Marios 2026-08-18, twice revised 2026-08-19:
+1. **Argo CD (GitOps)** — 2. Observability, all three stages (ADR 0011) — 3. pgvector RAG —
+4. EKS. EKS moved from second to **last**, and Argo CD moved ahead of observability so that
+everything after it is deployed *through* GitOps rather than retrofitted. That widens the ADR 0006
+contradiction rather than narrowing it; hence ADR 0006 is amended now rather than at kickoff.
