@@ -10,8 +10,6 @@ on:
     paths:
       - 'a-game-brain/**'
       - '.github/workflows/evals-a-game-brain.yml'
-  schedule:
-    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
