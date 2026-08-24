@@ -54,7 +54,7 @@ jobs:
         run: kubectl apply -f k8s/argocd/01-namespace-argocd.yaml
 
       - name: Validate manifests for argoCD
-        run: kubectl apply --dry-run=server -f k8s/argocd/
+        run: kubectl apply --server-side --dry-run=server -f k8s/argocd/
 
       # Application
       - name: Create namespace
