@@ -1,0 +1,301 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-repo-server
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-repo-server
+  policyTypes:
+    - Egress
+  egress:
+    - to: #reach internet (github access)
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 172.18.0.0/16
+              - 10.43.0.0/16
+              - 10.42.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+
+    - to: #reach redis manifest cache
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    - to: #resolve github.com via CoreDNS in kube-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-application-controller
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-application-controller
+  policyTypes:
+    - Egress
+  egress:
+    - to: #reach repo-server
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: argocd
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-repo-server
+      ports:
+        - protocol: TCP
+          port: 8081
+
+    - to: #reach redis
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: argocd
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    - to: #reach kubernetes API server - NOT a pod, so ipBlock against the node
+        - ipBlock:
+            cidr: 172.18.0.2/32
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    - to: #reach CoreDNS in kube-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-server
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: argocd-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+
+    - to:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: argocd-repo-server
+      ports:
+        - protocol: TCP
+          port: 8081
+    
+    - to: #reach kubernetes API server - NOT a pod, so ipBlock against the node
+        - ipBlock:
+            cidr: 172.18.0.2/32
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+        podSelector:
+          matchLabels:
+            k8s-app: kube-dns
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+
+    - to:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: argocd-dex-server
+      ports:
+        - protocol: TCP
+          port: 5556
+        - protocol: TCP
+          port: 5557
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-applicationset-controller
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-applicationset-controller
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: argocd-repo-server
+      ports:
+        - protocol: TCP
+          port: 8081
+    
+    - to: #reach kubernetes API server - NOT a pod, so ipBlock against the node
+        - ipBlock:
+            cidr: 172.18.0.2/32
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+        podSelector:
+          matchLabels:
+            k8s-app: kube-dns
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-notifications-controller
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-notifications-controller
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: argocd-repo-server
+      ports:
+        - protocol: TCP
+          port: 8081
+    
+    - to: #reach kubernetes API server - NOT a pod, so ipBlock against the node
+        - ipBlock:
+            cidr: 172.18.0.2/32
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+        podSelector:
+          matchLabels:
+            k8s-app: kube-dns
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+
+---
+
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dex-server
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-dex-server
+  policyTypes:
+    - Egress
+  egress:
+    - to: #reach kubernetes API server - NOT a pod, so ipBlock against the node
+        - ipBlock:
+            cidr: 172.18.0.2/32
+      ports:
+        - protocol: TCP
+          port: 6443
+
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+        podSelector:
+          matchLabels:
+            k8s-app: kube-dns
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress: []
