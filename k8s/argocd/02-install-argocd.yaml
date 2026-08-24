@@ -32094,6 +32094,12 @@ spec:
         image: quay.io/argoproj/argocd:v3.5.1
         imagePullPolicy: Always
         name: argocd-applicationset-controller
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 128Mi
         ports:
         - containerPort: 7000
           name: webhook
@@ -32236,6 +32242,12 @@ spec:
         image: ghcr.io/dexidp/dex:v2.45.0
         imagePullPolicy: Always
         name: dex
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 128Mi
         ports:
         - containerPort: 5556
         - containerPort: 5557
@@ -32389,6 +32401,12 @@ spec:
           tcpSocket:
             port: 9001
         name: argocd-notifications-controller
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 128Mi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -32485,6 +32503,12 @@ spec:
         image: public.ecr.aws/docker/library/redis:8.2.3-alpine
         imagePullPolicy: Always
         name: redis
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 128Mi
         ports:
         - containerPort: 6379
         securityContext:
@@ -32824,6 +32848,12 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 5
         name: argocd-repo-server
+        resources:
+          requests:
+            cpu: 50m
+            memory: 192Mi
+          limits:
+            memory: 512Mi
         ports:
         - containerPort: 8081
         - containerPort: 8084
@@ -33344,6 +33374,12 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 5
         name: argocd-server
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 256Mi
         ports:
         - containerPort: 8080
         - containerPort: 8083
@@ -33806,6 +33842,12 @@ spec:
         image: quay.io/argoproj/argocd:v3.5.1
         imagePullPolicy: Always
         name: argocd-application-controller
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            memory: 1Gi
         ports:
         - containerPort: 8082
         readinessProbe:
