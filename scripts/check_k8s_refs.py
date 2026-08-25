@@ -26,6 +26,10 @@ import yaml
 # Created by hand before `kubectl apply -f k8s/`. Keep in step with the README.
 EXTERNAL_SECRETS = {
     "anthropic-credentials",
+    "argocd-dex-server-tls",
+    "argocd-redis",
+    "argocd-repo-server-mtls",
+    "argocd-repo-server-tls",
     "clickhouse-credentials",
     "db-credentials",
     "lang-db-credentials",

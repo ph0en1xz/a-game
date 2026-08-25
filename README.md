@@ -239,9 +239,9 @@ Not done:
 - The predictions half of the schema isn't modelled yet
 - CI exists for the three services but is unproven; the Terraform plan job from
   [ADR 0006](docs/adr/0006-cicd-github-actions-gitops-later.md) isn't built
-- GitOps is in progress — the `argocd` namespace manifest exists, but Argo CD isn't installed and
-  no `Application` is defined yet. The install steps under Running it locally are instructions,
-  not a description of a running system
+- GitOps is running. Argo CD v3.5.1 reconciles `k8s/` and manages itself from `k8s/argocd/`; both
+  `Application`s are Synced and Healthy. Auto-sync is on for `a-game`; prune and self-heal are
+  still off
 - No metrics, logs or alerting
 - Nothing has run on real AWS yet
 - No auth on the API
@@ -386,17 +386,24 @@ Argo CD reconciles `k8s/` against the cluster, so Git becomes the source of trut
 whatever was last applied by hand. It lives in its own `argocd` namespace and its manifests are in
 `k8s/argocd/`.
 
-Install it, pinned — `stable` moves, and you want the same bytes next time:
+The pinned v3.5.1 install manifest is vendored at `k8s/argocd/02-install-argocd.yaml` rather than
+curled at install time, so Argo CD's own workloads are visible in Git and can be managed by Argo CD.
+Bootstrap it:
 
 ```bash
-kubectl apply -f k8s/argocd/01-argocd-namespace.yaml
-kubectl apply -n argocd --server-side --force-conflicts \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.1/manifests/install.yaml
+kubectl apply -f k8s/argocd/01-namespace-argocd.yaml
+kubectl apply -n argocd --server-side --force-conflicts -f k8s/argocd/02-install-argocd.yaml
+kubectl apply -f k8s/argocd/05-application-argocd.yaml
 ```
 
-`--server-side` is not optional. The install manifest is large enough that a client-side apply
-overflows the `last-applied-configuration` annotation on some of the CRDs, and server-side apply is
-what upstream tests against.
+`--server-side` is not optional. Client-side apply writes the whole manifest into the
+`last-applied-configuration` annotation, and the `applicationsets.argoproj.io` CRD exceeds the
+262,144-byte limit — you get `metadata.annotations: Too long`. The same is why the `argocd`
+Application carries `syncOptions: [ServerSideApply=true]` and CI's dry-run step passes
+`--server-side`.
+
+Re-vendoring on a version bump means re-applying the local edits in that file: resource requests
+and limits, which upstream does not ship.
 
 There's an `manifests/ha/install.yaml` variant too. Skip it — HA runs Redis as a three-node cluster
 plus extra replicas of every component, which on a single k3d node costs real memory and buys
@@ -411,24 +418,51 @@ other than 8080 locally because the ingress already holds that. The initial admi
 Secret called `argocd-initial-admin-secret` under key `password`. Change the password, then delete
 that Secret; it's meant to be transient.
 
-**Sync settings, and why they start conservative.** The first `Application` points at `path: k8s/`
-on `main` with no `syncPolicy` block at all, which means manual sync, no prune, no self-heal. Prune
-lets Argo CD delete anything on the cluster that isn't in Git — the right end state, and the wrong
-thing to have enabled during the first sync, when the diff still contains drift you haven't looked
-at. Self-heal reverts manual changes automatically, which will silently undo a `kubectl edit` and
-cost you an hour wondering why. Turn both on together, after the first few syncs are boring.
+Once that Secret is gone the password is unrecoverable — it lives only as a bcrypt hash in
+`argocd-secret`. To reset it, generate a hash with `argocd account bcrypt --password '<new>'` and
+patch `argocd-secret`'s `stringData` with both `admin.password` and `admin.passwordMtime`. The mtime
+invalidates issued tokens, so existing CLI sessions fail with `account password has changed since
+token issued` until you log in again.
+
+A port-forward binds to one pod and never re-resolves, so any pod replacement kills it with
+`lost connection to pod`. That is not a NetworkPolicy problem — a policy drop hangs and times out,
+while a dead forward refuses instantly.
+
+**Sync settings, and why they start conservative.** Both `Application`s began with no `syncPolicy`
+block at all, which means manual sync, no prune, no self-heal. Auto-sync came first, on `a-game`
+only, as `syncPolicy.automated: {}` — the empty braces matter, because `automated` with no fields
+turns on auto-sync while leaving prune and self-heal off. Prune lets Argo CD delete anything on the
+cluster that isn't in Git — the right end state, and the wrong thing to have enabled during the
+first sync, when the diff still contains drift you haven't looked at. Self-heal reverts manual
+changes automatically, which will silently undo a `kubectl edit` and cost you an hour wondering
+why. Turn both on after the first few syncs are boring.
+
+**Hook resources that linger are flagged for pruning forever.** Argo CD stamps its tracking
+annotation on everything it applies, hooks included, but hooks are excluded from desired state — so
+a hook resource still on the cluster looks like something Git no longer declares. Deleting it does
+not help; the hook recreates it stamped. The fix is
+`argocd.argoproj.io/hook-delete-policy: HookSucceeded`, which is why both the ConfigMap and the Job
+in `21-langfuse-db.yaml` carry it.
 
 **`k8s/` is not synced recursively, and that's deliberate.** Argo CD defaults to non-recursive
 directory scanning, so an Application on `k8s/` sees the numbered manifests and skips the
 subdirectories — including `k8s/test/nginx.yaml`, which you do not want in the cluster. The same
 non-recursion applies in `ci-k8s-manifests.yml`: both Python checkers glob `*.yaml` in one
 directory and the dry-run has no `-R`, so anything under `k8s/argocd/` needs its own explicit
-invocation in that workflow or it ships unvalidated.
+invocation in that workflow — which it now has: both checkers and the dry-run run twice, once per
+directory. One gap remains by construction: because each checker globs a single directory, a policy
+pair that spans `k8s/` and `k8s/argocd/` cannot be validated by it. Cross-namespace pairing stays
+a manual check.
 
 **Argo CD is the one thing that can't be installed by Argo CD.** You bootstrap it with `kubectl
-apply`, and only then can it manage everything else — itself included, via an app-of-apps root.
-That chicken-and-egg step is expected. Committing the upstream `install.yaml` into `k8s/argocd/`
-rather than applying it from the URL is what makes the self-management half honest.
+apply`, and only then can it manage everything else — itself included. That chicken-and-egg step is
+expected, and it applies to the `argocd` Application too: merging it to `main` changes nothing,
+because until it exists nothing is watching `k8s/argocd/`. Apply it by hand once; it self-manages
+after that.
+
+There is no separate app-of-apps root manifest. `k8s/argocd/` contains both Application files, so
+the `argocd` Application manages the `a-game` Application as one of its resources — the same
+pattern, arrived at without an extra layer.
 
 Once Argo CD is running and syncing, `kubectl apply -f k8s/` is drift, not deployment. That's the
 whole point, but it is a real change to how you work day to day.

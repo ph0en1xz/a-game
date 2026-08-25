@@ -53,6 +53,12 @@ jobs:
       - name: Create argo CD namespace
         run: kubectl apply -f k8s/argocd/01-namespace-argocd.yaml
 
+      - name: Cross-reference names (argo CD)
+        run: python3 scripts/check_k8s_refs.py k8s/argocd
+
+      - name: Pair network policies (argo CD)
+        run: python3 scripts/check_k8s_policies.py k8s/argocd
+
       - name: Validate manifests for argoCD
         run: kubectl apply --server-side --dry-run=server -f k8s/argocd/
 
