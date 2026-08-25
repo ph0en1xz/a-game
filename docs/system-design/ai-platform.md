@@ -47,7 +47,7 @@ without changing what gets predicted.
 | 1 | **Model-comparison report** (2026-08-05) | Output of the eval harness | free | Same eval set across every gateway route: quality scores, latency p50/p95, cost per preview. Converts the fallback configuration into a measured selection. Extends to three routes once the self-hosted model lands. |
 | 2 | **pgvector RAG** | `vector` extension on existing Postgres | free | Retrieve similar historical matches to ground each preview. No new datastore. **Retrieval evaluated separately from generation** (recall@k on a labeled set, 2026-08-05) — feeding the same harness. |
 | 2 | **Tool-using agent** (2026-08-05) | Module in brain (no new workload) | ~free | Match-analyst agent calling three tools (`get_recent_form`, `get_h2h`, `get_standings`) against existing Postgres; hard iteration cap, validated tool calls, every step traced in Langfuse. Stays out of the daily pipeline until its traces have been read. |
-| 2 | **Argo Workflows** | Controller + CRDs | ~free | Retries, backfills, run UI for the daily pipeline. **Open fork (see below):** either replaces just the worker scheduler (brain stays event-driven) or models the whole pipeline as a DAG. Never triggers brain on a timer. |
+| — | ~~**Argo Workflows**~~ | — | — | **WITHDRAWN 2026-08-19** (ADR 0008 §Amendments). The fork was never settled because the premise failed: a DAG engine solves a different problem from the one here, and the CronJob already does the job. **Argo CD** was adopted instead — a reconciler, not an orchestrator — and it is live on k3d (ADR 0006 §Amendments). |
 | 3 | **Self-hosted model route** (2026-08-05) | Ollama Deployment, CPU, ~3B model | ~free | Third `model_list` route beside the two commercial ones: *commercial + self-hosted behind one interface*. Inference serving at CPU scale — resource limits, cold starts, quantization trade-offs — no GPU spend. Yields before Langfuse does if laptop RAM forces a choice. |
 | 3 | **vLLM / KServe** | GPU node group | $$ — **doc-only** | GPU inference. Designed, provable briefly, never left running. Unchanged by the CPU-scale route above. |
 
@@ -189,21 +189,25 @@ showable in five minutes — a failing CI run, a comparison table, a trace, a do
    pipeline until its traces have been read.
 9. **Self-hosted model route** — Ollama (~3B, CPU) as a third `model_list` entry; extend the
    comparison report to three routes.
-10. **Argo Workflows** — settle the fork first (defaulting to (A) scheduler-only), then
-    introduce Argo accordingly.
+10. ~~**Argo Workflows**~~ — withdrawn 2026-08-19, not deferred. Argo CD took its place in the
+    roadmap and shipped 2026-08-24.
 11. **vLLM/KServe** — design ADR + Terraform GPU nodegroup; prove briefly; leave off.
 
 ## Impact on the existing k8s design & services
 
-None of this is built yet — this is the change map from today's setup. Nothing here changes
-what gets predicted; it changes where the LLM call goes and what observes it.
+**Tier 1 is built and running as of 2026-08-18** — the LiteLLM gateway, the six-component
+Langfuse stack and the eval harness are all deployed and verified end to end. Tiers 2 and 3
+remain unbuilt. What follows was written as the change map from the pre-Tier-1 setup, and is
+kept because the reasoning behind each choice is still the reasoning in force. Nothing here
+changes what gets predicted; it changes where the LLM call goes and what observes it.
 
 ### Kubernetes design
 
 - **Add workloads (Tier 1 = five, all off-the-shelf images):** LiteLLM gateway (Deployment +
   ClusterIP Service + Secret + its own ServiceAccount), `langfuse-web` + `langfuse-worker`
-  Deployments, ClickHouse and MinIO StatefulSets — all ClusterIP. Tier 2 adds Argo Workflows
-  (controller + CRDs + RBAC). *(Tier 3 GPU serving is designed, not deployed.)*
+  Deployments, ClickHouse and MinIO StatefulSets — all ClusterIP. **All five are deployed.**
+  Tier 2 adds no new workloads: pgvector is an extension on the existing Postgres and the
+  tool-using agent is a module in brain. *(Tier 3 GPU serving is designed, not deployed.)*
 - **Create the Anthropic Secret on the gateway.** Nothing holds it today — the brain pod never
   had it, because the LLM call was never built. It is created directly against the
   **gateway's** ServiceAccount, scoped via IRSA on EKS. brain never receives it.

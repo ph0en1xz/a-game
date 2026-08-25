@@ -1,6 +1,6 @@
 # ADR 0011 — Observability: metrics and logs for the cluster and the services
 
-- **Status:** Proposed — 2026-08-18. Not yet decided.
+- **Status:** Proposed — 2026-08-18. Not yet decided. **§Decision's Stage 1 mechanism is superseded — see §Amendments (2026-08-18).**
 - **Date:** 2026-08-18
 - **Related:** ADR 0002 (EKS as the prod target), ADR 0008 (AI platform layer — Langfuse is
   LLM-only observability and does not cover this), ADR 0009 (local validation on k3s)
@@ -104,3 +104,33 @@ because its value depends on Stage 2 having happened.
 3. **Stage 2 correlation id.** Generated at ingestion and carried on the RabbitMQ message, or
    generated per prediction in brain? The first is more useful and touches more code.
 4. **Ordering against Tier 2.** This competes with pgvector and Argo for the same headroom.
+
+## Amendments
+
+### 2026-08-18 — plain manifests, not Helm; a `monitoring` namespace
+
+Stage 1 above specifies `kube-prometheus-stack` **via Helm**. That mechanism was changed the same
+day the ADR was written, before any of it was built:
+
+- **Plain hand-written manifests. No Helm, no Prometheus Operator, no CRDs.** Helm is not installed
+  on this machine, and `k8s/` is a set of hand-written numbered manifests — introducing a package
+  manager and an operator for one component would break that consistency and hide the objects the
+  exercise exists to teach. Scrape targets live in a ConfigMap instead of `ServiceMonitor` CRDs.
+- **A new `monitoring` namespace**, not `a-game`.
+- The stack itself is unchanged: Prometheus, Grafana, kube-state-metrics, node-exporter/kubelet
+  cAdvisor, Alertmanager. Only the delivery mechanism differs.
+
+**A cost noted in the ADR does not bite in Stage 1.** Cross-namespace NetworkPolicy work was
+listed as a consequence, but Prometheus scrapes only kube-state-metrics and the kubelet at this
+stage — neither is in `a-game`, and a fresh namespace has no policies. That boundary becomes real
+work only at Stage 2, when the Python services expose their own `/metrics`.
+
+**Status of the work.** Step 1 (the namespace decision) is done. Step 2 — kube-state-metrics —
+is written up and not yet started. As of 2026-08-24 the whole item is **paused** behind Langfuse
+experimentation and application debugging.
+
+### 2026-08-24 — it will be deployed through Argo CD
+
+Argo CD went in first, deliberately (ADR 0006 §Amendments 2026-08-19), so these manifests become
+Argo CD-managed resources from the start rather than eight files hand-applied and migrated later.
+That is the whole reason the roadmap order was swapped.

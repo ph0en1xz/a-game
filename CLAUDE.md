@@ -6,9 +6,9 @@ Football statistics and predictions app built on the football-data.org API: Elo 
 
 ## Read these first
 - `TECHSTACK.md` — fast-load stack reference (runtime, services, DB, IaC, commands). Authoritative for the stack.
-- `docs/adr/` — decisions 0001–0009. Current state = **0002** (EKS prod target for learning), **0003** (API-only surface), **0004** (Python stack), **0005** (precompute architecture), **0006** (GitHub Actions CI/CD; GitOps deferred), **0007** (daily, change-gated ingestion), **0008** (AI platform layer — LiteLLM gateway, Langfuse, **CI evals as the flagship**; amended through 2026-08-05), **0009** (EKS Terraform plan-only; Kubernetes learning on local k3s). ADR 0001 survives only in its Postgres/Terraform/Docker/Claude portions.
+- `docs/adr/` — decisions 0001–0011. Current state = **0002** (EKS prod target for learning), **0003** (API-only surface), **0004** (Python stack), **0005** (precompute architecture), **0006** (GitHub Actions CI/CD; **GitOps is live on k3d** — amended 2026-08-19 and 2026-08-24, reversing the original deferral), **0007** (daily, change-gated ingestion), **0008** (AI platform layer — LiteLLM gateway, Langfuse, **CI evals as the flagship**; amended through 2026-08-19, when Argo Workflows was withdrawn), **0009** (EKS Terraform plan-only; Kubernetes learning on local k3s), **0010** (prediction engine parameters), **0011** (observability stack — *Proposed*, not built). ADR 0001 survives only in its Postgres/Terraform/Docker/Claude portions.
 - `docs/system-design/ai-platform.md` — the AI platform layer design (gateway routes, Langfuse, eval harness, build order). Read before touching anything AI-related.
-- `docs/api-spec.md` (v2) — the public HTTP contract.
+- `docs/api-spec.md` (v4) — the public HTTP contract.
 - `docs/input-spec.md` — v1 input specification and the Elo/Poisson engine design table.
 - `docs/system-design/` — layered architecture + flow diagrams (README has the reading order).
 
@@ -43,9 +43,11 @@ The secret-consumption rule in Non-negotiables is what makes step 2 additive rat
 - Terraform: `terraform -chdir=infrastructure/<layer> plan|apply` (endpoints → LocalStack)
 
 ## Structure
-- `docs/` — ADRs (0001–0009), api-spec (v2), input-spec, schema, system-design diagrams + `ai-platform.md`.
+- `docs/` — ADRs (0001–0011), api-spec (v4), input-spec, schema, system-design diagrams + `ai-platform.md`.
 - `infrastructure/` — layered Terraform roots: `network/` (**applied** against LocalStack), `cluster/` (**plan-only**, ADR 0009), `app/` (S3 state working).
 - `k8s/` — hand-written manifests for the local k3d cluster (numbered 00–90): namespace, ServiceAccounts, Postgres, Redis, RabbitMQ, api, brain, worker, **default-deny NetworkPolicies in both directions** (`50-`), and the **LiteLLM gateway** (`90-`). Workloads are hardened: non-root, capabilities dropped, read-only rootfs, no SA token automount.
 - `a-game-api/`, `a-game-brain/`, `a-game-worker/` — the three Python services (FastAPI api; brain = RabbitMQ consumer with `handlers.py`/`db.py`/`stores.py`; worker = ingestion with change gate + transactional outbox). Each has its own CI workflow (`.github/workflows/`, merged 2026-08-04) plus a manifest-validation workflow.
 - `localstack/init/ready.d/` — LocalStack init hooks (recreates the tfstate bucket; community LocalStack is ephemeral).
-- **Still stubbed:** the Elo/Poisson engine (`handlers.py` logs `(stub)`), `commentary.py` (spec'd, not written), the predictions schema. The AI platform Tier 1 (Langfuse, eval harness) is designed, not deployed; gateway manifest exists with the two-provider config specified.
+- **Still stubbed:** the Elo/Poisson engine (`handlers.py` logs `(stub)`), `commentary.py` (spec'd, not written), the predictions schema.
+- **AI platform Tier 1 is complete and running** (2026-08-18): LiteLLM gateway, the six-component Langfuse stack, and the eval harness (`a-game-brain/evals/`, 81 checks). An end-to-end trace was verified in ClickHouse. ⚠️ The LiteLLM callback is **`langfuse_otel`**, not `langfuse` — the plain callback is silently incompatible with a v4 server.
+- **GitOps is running** (2026-08-24). Argo CD v3.5.1 reconciles `k8s/` and manages itself from `k8s/argocd/`. `kubectl apply -f k8s/` is now drift, not deployment.

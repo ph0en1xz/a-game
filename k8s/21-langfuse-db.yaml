@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/part-of: a-game
   annotations:
     argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
 data:
   create_langfuse_db.sql: |
     \set ON_ERROR_STOP 1

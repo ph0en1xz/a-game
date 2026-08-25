@@ -1,6 +1,6 @@
 # ADR 0006 — CI/CD: GitHub Actions now, GitOps (Argo CD) on EKS later
 
-- **Status:** Accepted — **amended 2026-08-19** (see §Amendments). The title's "on EKS later" no
+- **Status:** Accepted — **amended 2026-08-19 and 2026-08-24** (see §Amendments). The title's "on EKS later" no
   longer holds: Argo CD now lands on k3d, ahead of EKS.
 - **Date:** 2026-07-10
 - **Deciders:** Mario (Nexoro Tech)
@@ -69,3 +69,58 @@ configuration, not redesign.
 **Unchanged by this amendment.** GitHub Actions remains the CI/CD platform with the same scope and
 OIDC-to-AWS posture. `kubectl apply` remains correct for k3d **until** Argo CD is in place; after
 that, `k8s/` is reconciled from Git and manual applies become drift.
+
+### 2026-08-24 — the settings actually chosen, and Argo CD self-management
+
+The 2026-08-19 amendment decided *that* Argo CD lands on k3d. This records *how* it was configured,
+so the choices are recoverable without reading the manifests.
+
+**Repository and application layout.** One repository, not a separate config repo — a second repo is
+overhead for one person. Two `Application`s, both in project `default`:
+
+| Application | `path` | Destination namespace | Manages |
+|---|---|---|---|
+| `a-game` | `k8s` | `a-game` | the platform and application workloads |
+| `argocd` | `k8s/argocd` | `argocd` | Argo CD itself, its NetworkPolicies, and both Application manifests |
+
+Because `k8s/argocd` contains `04-application-a-game.yaml`, the `argocd` Application manages the
+`a-game` Application. That is the app-of-apps pattern, reached without a separate root manifest.
+
+**Sync settings, and the order they were enabled.** Both Applications started with no `syncPolicy`
+at all — manual sync, no prune, no self-heal. Auto-sync was enabled on `a-game` first
+(`syncPolicy.automated: {}`), deliberately one change at a time: `automated` with empty braces turns
+on auto-sync while leaving prune and self-heal off. Prune and self-heal remain off pending several
+uneventful syncs. Neither Application carries `metadata.finalizers`, so
+`kubectl delete application` does not cascade into deleting managed resources — right eventually,
+wrong while learning.
+
+**`ServerSideApply=true` is required, not stylistic.** Client-side apply writes the full manifest
+into the `kubectl.kubernetes.io/last-applied-configuration` annotation, and the
+`applicationsets.argoproj.io` CRD exceeds the 262,144-byte annotation limit. Without the sync
+option the first sync of `install.yaml` fails with `metadata.annotations: Too long`. The same
+applies to CI's dry-run step, which needs `--server-side`.
+
+**`ignoreDifferences` on two Secrets.** `install.yaml` declares `argocd-secret` and
+`argocd-notifications-secret` as empty shells — name, labels, `type: Opaque`, no `data`. The live
+`argocd-secret` holds `admin.password`, `admin.passwordMtime` and `server.secretkey`, all generated
+or set at runtime. Both Secrets' `/data` is therefore excluded from comparison; without it the
+Application is permanently OutOfSync, and self-heal would reconcile login credentials toward an
+empty declaration.
+
+**Upstream `install.yaml` is vendored, not curled.** The pinned v3.5.1 manifest is committed at
+`k8s/argocd/02-install-argocd.yaml`. Applying it from a URL left Argo CD's own seven workloads
+invisible to Git — the one component outside its own supervision. Two consequences follow: the
+directory now describes Argo CD completely, and resource requests/limits become an ordinary commit
+rather than a `kubectl edit` that drifts.
+
+**Resource requests and limits were added on top of upstream.** Upstream ships none, leaving all
+seven pods BestEffort and first to be evicted next to ClickHouse at ~2.1Gi. Values were measured
+from an idle cluster rather than guessed. CPU requests only, no CPU limits — throttling causes
+latency and the request is what scheduling uses; memory carries both, because memory cannot be
+throttled, only killed. The edits live inside the vendored file, so an Argo CD version bump means
+re-vendoring and re-applying them.
+
+**Egress NetworkPolicies are ours; ingress is upstream's.** `install.yaml` ships seven
+ingress-only NetworkPolicies, one per component, and zero egress rules — deliberately, since
+egress depends on the API server address, the git host and whether SSO is used. The seven egress
+policies in `k8s/argocd/03-networkpolicies-argocd.yaml` are the local half.

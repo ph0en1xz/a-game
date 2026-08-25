@@ -5,7 +5,7 @@
 **Project:** A-Game — football statistics, predictions (Elo + Poisson), AI-generated match previews, and value-bet suggestions, delivered as an API-only SaaS on football-data.org data.
 **Owner:** Mario (Nexoro Tech)
 **Repo:** ~/repos/a-game (WSL2 Ubuntu, canonical; Windows-side copy deprecated)
-**Status:** API read path shipped and merged to `main` (PR #11, 2026-08-11) and verified on local k3d · Python stack (ADR 0004, 2026-07-09) · prod target = EKS for learning (ADR 0002), Terraform plan-only (ADR 0009); final prod deferred
+**Status:** API read path shipped and merged to `main` (PR #11, 2026-08-11) and verified on local k3d · **AI platform Tier 1 complete** (LiteLLM + Langfuse + eval harness, 2026-08-18) · **GitOps live on k3d** (Argo CD v3.5.1, self-managing, 2026-08-24) · Python stack (ADR 0004, 2026-07-09) · prod target = EKS for learning (ADR 0002), Terraform plan-only (ADR 0009); final prod deferred
 
 ---
 
@@ -47,11 +47,12 @@
 ## Orchestration & packaging
 - **Docker** — multi-stage, non-root.
 - **Kubernetes — the compute model end to end:** **k3s** (via k3d) locally, **EKS** as the prod target. Deliberate: the priority is hands-on Kubernetes experience. Workloads: Deployments (api, brain), CronJob (worker), StatefulSets (RabbitMQ, Redis, Postgres).
+- **Argo CD** in its own `argocd` namespace reconciles the cluster from Git. Argo **Workflows** was evaluated and **withdrawn** (ADR 0008 §Amendments, 2026-08-19) — a DAG engine solves a different problem, and the CronJob already does the job.
 
 ## CI/CD (ADR 0006, 2026-07-10)
 - **GitHub Actions** — CI (ruff · mypy · pytest · Docker build) once app code exists; `terraform plan` / gated `apply` via **OIDC** (no static AWS keys). One workflow per service, path-filtered.
 - **Coverage gate: 80%**, and it lives in each service's `pyproject.toml` (`addopts = "--cov=app --cov-report=term-missing --cov-fail-under=80"`), **not in the workflow**. Deliberate: `uv run pytest` on the laptop enforces exactly the bar CI does, so the gate can't be discovered only after a push. Present in `a-game-brain` and `a-game-worker`; **`a-game-api` has neither the gate nor the pytest dependency group yet** — add both when its tests land.
-- **Local deploys:** `kubectl apply` to k3d. **GitOps (Argo CD)** deferred to the EKS/prod phase (needs a persistent cluster to reconcile against).
+- **GitOps: Argo CD v3.5.1, running on k3d** (ADR 0006 §Amendments 2026-08-19 and 2026-08-24 — reverses the original "defer to EKS" call; a reconcile loop needs a cluster that is *running*, not one that is permanent). Two `Application`s in project `default`: `a-game` → `path: k8s`, and `argocd` → `path: k8s/argocd`, which manages Argo CD itself and both Application manifests. Upstream `install.yaml` is vendored at `k8s/argocd/02-install-argocd.yaml`. Auto-sync is on for `a-game`; prune and self-heal stay off. `ServerSideApply=true` is required — the ApplicationSet CRD exceeds the 262KB `last-applied-configuration` annotation limit. **`kubectl apply -f k8s/` is now drift, not deployment.**
 
 ## Prod execution model (ADR 0002, 2026-07-08 — supersedes ADR 0001)
 - **EKS as the working prod target**, chosen to maximize Kubernetes learning. Layered Terraform: **network** (VPC/subnets) → **cluster** (EKS control plane, node groups, IRSA) → **app** (workloads, app IAM, RDS, S3).
@@ -82,7 +83,7 @@
 ---
 
 ## Decisions
-See `docs/adr/` for decisions, `docs/input-spec.md` for engine detail, `docs/api-spec.md` (v2) for the API contract, `docs/schema.md` for the database schema, `docs/system-design/` for the diagram.
+See `docs/adr/` for decisions, `docs/input-spec.md` for engine detail, `docs/api-spec.md` (v4) for the API contract, `docs/schema.md` for the database schema, `docs/system-design/` for the diagram.
 - ✅ **Prediction engine** — PL only at launch; ratings keyed by team+competition; 3-season
   window, 6-month decay, K=20 with damped GD scaling, +70 HFA, promoted teams seed at league
   average − penalty, 5–6 match min sample; probabilities come from the Poisson matrix, Elo is
@@ -91,9 +92,10 @@ See `docs/adr/` for decisions, `docs/input-spec.md` for engine detail, `docs/api
   (the free tier serves only three seasons — `season=2022` is a 403 — so the backtest's
   held-out season becomes a *tuning*-quarantined one: develop on 2024/25, accept on 2025/26).
 - ✅ **Local validation split** — EKS Terraform stays plan-only (LocalStack Community has no EKS); Kubernetes learning runs on local k3s via k3d. **ADR 0009**, 2026-07-28.
-- ✅ **AI platform layer** — LiteLLM gateway, self-hosted Langfuse, CI eval gate (Tier 1); pgvector RAG + Argo (Tier 2); GPU serving doc-only (Tier 3). **ADR 0008**, 2026-07-22, amended 2026-07-30 (Langfuse is six components; Tier 1 runs before the infra track), 2026-08-04 (second provider + fallback chain), and 2026-08-05 (evals become the flagship; model-comparison report; tool-using agent; self-hosted CPU-scale model route; AI threat model; non-goals fixed).
+- ✅ **AI platform layer** — LiteLLM gateway, self-hosted Langfuse, CI eval gate (**Tier 1 complete 2026-08-18**); pgvector RAG + tool-using agent (Tier 2, not built — Argo Workflows withdrawn 2026-08-19); GPU serving doc-only (Tier 3). **ADR 0008**, 2026-07-22, amended 2026-07-30 (Langfuse is six components; Tier 1 runs before the infra track), 2026-08-04 (second provider + fallback chain), and 2026-08-05 (evals become the flagship; model-comparison report; tool-using agent; self-hosted CPU-scale model route; AI threat model; non-goals fixed).
 - ✅ **Ingestion cadence** — daily at 06:00 UTC; "data ready" published only when the upsert changed rows; 3-season backfill is a one-off bootstrap. **ADR 0007**, 2026-07-16 (amends ADR 0005's 6h cadence).
-- ✅ **CI/CD** — GitHub Actions (CI + Terraform via OIDC); local `kubectl apply`; GitOps (Argo CD) deferred to EKS/prod phase. **ADR 0006**, 2026-07-10.
+- ✅ **Observability stack** — Prometheus/Grafana metrics first, then structured logging + `/metrics`, then Loki. **ADR 0011**, 2026-08-18, **Proposed and not built**. ⚠️ Its §Decision still names `kube-prometheus-stack` via Helm; the mechanism was changed to plain manifests (no Helm, no Operator, no CRDs) on 2026-08-18 — see §Amendments.
+- ✅ **CI/CD** — GitHub Actions (CI + Terraform via OIDC); **GitOps via Argo CD, running on k3d since 2026-08-19/24** (originally deferred to the EKS/prod phase; reversed). **ADR 0006**, 2026-07-10, amended 2026-08-19 and 2026-08-24.
 - ✅ **v1 service architecture** — precompute pipeline; Postgres = prediction record; RabbitMQ single broker (learning); Redis cache-only; API keys; WS → Phase 2. **ADR 0005**, 2026-07-09 (amends ADR 0003's endpoint set), amended 2026-08-10 (endpoint set reduced to the single team-suggestions endpoint, commentary-only payload — api-spec v3).
 - ✅ **Language: Python** (FastAPI/pydantic/uv). **ADR 0004**, 2026-07-09 (supersedes ADR 0001's Node/TS).
 - ✅ **Product surface** — API-only SaaS, no v1 frontend. **ADR 0003**, 2026-07-09 (endpoint set since amended by 0005).
